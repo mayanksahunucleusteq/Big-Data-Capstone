@@ -1,0 +1,68 @@
+----------------------------------------------------------------------------------
+Start for setup this in docker and also install jupyter on docker and setup:
+
+First save the docker-compose.yaml file into your system run some commands.
+
+1. docker-compose up build
+#It build a container of your docker image for the docker setup
+
+So after container build sucessfully you need to open new terminal to run the container
+
+Some commands you need to run the container and install some dependencies as well as software you run in this container
+
+Run Command : 
+
+2. docker exec -it -u root container_master_id /bin/bash
+#This command for run the root user that you need initially 
+
+Here is some commands you need to run to install jupyter notebook and others:
+3. apt-get update
+4. apt-get install nano
+
+5. apt-get install -y python3-pip
+
+Now Install Jupyter Notebook and configure it:
+
+6. pip3 install jupyter
+7. jupyter notebook --generate-config
+
+#Now go to root
+8. cd /.jupyter
+9. nano jupyter_notebook_config.py
+
+Here the file open so do some:
+
+Add this after C
+ 
+c.NotebookApp.ip = '0.0.0.0'
+c.NotebookApp.port = 8888
+c.NotebookApp.open_browser = False
+c.NotebookApp.allow_root = True
+
+then save and exit
+
+
+Now cd ..
+and out the all directory
+Run some commands for giving acess to user
+
+chown -R 777 opt
+chmod -R 777 opt
+chown -R 777 .local
+chmod -R 777 .local
+
+For User:
+
+docker exec -it container_id /bin/bash
+
+jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------
+
+This is for setup or connect the container with VScode Locally so you don't need to open jupyter note book you just need to open vscode and do things noramlly with .py and .ipynb
+
+1. Run the master spark container with command or manually
+2.Open Vs code and Attached the running master container simply so yur can use this container with vscode.
