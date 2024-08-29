@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+demosfolder
+Data_Files
+
 # C extensions
 *.so
 
