@@ -4,8 +4,18 @@ from pyspark.sql.types import ArrayType
 import openpyxl
 import logging
 
+#Log Directory
+log_dir = '/spark-data/logs'
+os.makedirs(log_dir, exist_ok=True)
+log_file_path = os.path.join(log_dir, 'data_ingestion.log')
+
+
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', 
+                    handlers=[
+        logging.FileHandler(log_file_path), #for showing logs into file
+        logging.StreamHandler() #For showing logs to console
+    ])
 
 def get_sheet_names(file_path):
     try:
@@ -16,6 +26,7 @@ def get_sheet_names(file_path):
         return []
 
 def load_files(spark):
+
     folder_path = "/spark-data/Data_Files"
     dataframes = {}
 
@@ -41,6 +52,7 @@ def load_files(spark):
                         
                         df_name = f"df_{filename.split('.')[0]}_{sheet}"
                         dataframes[df_name] = df
+                        logging.info(f"Successfully loaded sheet '{sheet}' from Excel file: {file_path}")
                     except Exception as e:
                         logging.error(f"Error reading sheet '{sheet}' in Excel file: {file_path} - {e}")
                         continue
@@ -55,6 +67,7 @@ def load_files(spark):
                     
                     df_name = f"df_{filename.split('.')[0]}"
                     dataframes[df_name] = df
+                    logging.info(f"Successfully loaded CSV file: {file_path}")
                 except Exception as e:
                     logging.error(f"Error reading CSV file: {file_path} - {e}")
                     continue
@@ -72,12 +85,14 @@ def load_files(spark):
                                 df_nested = df_json.withColumn(field.name, explode(col(field.name))).select(f"{field.name}.*")
                                 df_name = f"df_{filename.split('.')[0]}_{field.name}"
                                 dataframes[df_name] = df_nested
+                                logging.info(f"Successfully processed nested JSON field '{field.name}' in file: {file_path}")
                             except Exception as e:
                                 logging.error(f"Error processing nested JSON field '{field.name}' in file: {file_path} - {e}")
                                 continue
                         else:
                             df_name = f"df_{filename.split('.')[0]}"
                             dataframes[df_name] = df_json
+                            logging.info(f"Successfully loaded JSON file: {file_path}")
                 except Exception as e:
                     logging.error(f"Error reading JSON file: {file_path} - {e}")
                     continue

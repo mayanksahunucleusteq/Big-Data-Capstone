@@ -5,6 +5,7 @@ __pycache__/
 
 demosfolder
 Data_Files
+logs
 
 # C extensions
 *.so
