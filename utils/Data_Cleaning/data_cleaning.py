@@ -3,11 +3,11 @@ import os
 import re
 from pyspark.sql.types import StringType
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import mean, col, floor, date_format, to_date, when, udf
+from pyspark.sql.functions import mean, col, floor, date_format, to_date, when, udf, regexp_replace
 
 
 #Log Directory
-log_dir = '/spark-data/logs'
+log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
 log_file_path = os.path.join(log_dir, 'data_cleaning.log')
 
@@ -18,6 +18,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
         logging.FileHandler(log_file_path), #for showing logs into file
         logging.StreamHandler() #For showing logs to console
     ])
+
+print(log_file_path)
 
 #Removing Duplicate
 def remove_duplicates(df: DataFrame, columns: list = None) -> DataFrame:
@@ -156,30 +158,35 @@ def drop_missing_values(df: DataFrame, how: str = 'any', subset: list = None) ->
     
     return df
 
-#Remove decimals
-def remove_decimal(df: DataFrame, column: str) -> DataFrame:
+#Remove decimal
+def remove_decimal(df: DataFrame, columns: list) -> DataFrame:
     """
-    Removes decimal values from a specific column in the DataFrame by rounding down.
-    
+    Removes decimal values from specific columns in the DataFrame by rounding down.
+
     Parameters:
     df (DataFrame): The input DataFrame.
-    column (str): The column name from which to remove decimal values.
-    
+    columns (list): List of column names from which to remove decimal values.
+
     Returns:
-    DataFrame: The DataFrame with decimal values removed from the specified column.
+    DataFrame: The DataFrame with decimal values removed from the specified columns.
     """
-    if column not in df.columns:
-        logging.error(f"Column '{column}' not found in the DataFrame.")
+    if not isinstance(columns, list):
+        logging.error("Parameter 'columns' must be of type 'list'.")
         return df
 
-    try:
-        # Use floor to remove decimal values while keeping the original type
-        df = df.withColumn(column, floor(col(column)))
-        logging.info(f"Successfully removed decimal values from column '{column}'.")
+    for column in columns:
+        if column not in df.columns:
+            logging.error(f"Column '{column}' not found in the DataFrame.")
+            continue  # Skip to the next column
 
-    except Exception as e:
-        logging.error(f"Error removing decimal values from column '{column}': {e}")
-    
+        try:
+            # Use floor to remove decimal values while keeping the original type
+            df = df.withColumn(column, floor(col(column)))
+            logging.info(f"Successfully removed decimal values from column '{column}'.")
+
+        except Exception as e:
+            logging.error(f"Error removing decimal values from column '{column}': {e}")
+
     return df
 
 #Date Format
@@ -231,6 +238,7 @@ def standardize_date_format(df: DataFrame, column: str, format: str = 'yyyy-MM-d
 
 #Phone number handeling
 def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
+
     # Define a function to clean phone numbers using regex
     def format_phone_number(phone: str) -> str:
         # If phone is "Not Available", return it as is
@@ -275,15 +283,83 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
     
     return df_cleaned
 
+def handle_negative_values(df: DataFrame, columns: list, operation: str = 'absolute', apply_floor: bool = False) -> DataFrame:
+    """
+    Handles negative values in specific columns of the DataFrame, with options to convert, remove (set to null), 
+    replace with zero, or drop rows containing negative values. Optionally, remove decimal places.
+
+    Parameters:
+    df (DataFrame): The input DataFrame.
+    columns (list): List of column names to handle negative values.
+    operation (str): Operation to perform on negative values. Options are 'absolute' (convert to positive), 'remove' (set to null), 
+                     'zero' (set to 0), or 'drop' (remove rows with negative values).
+    apply_floor (bool): Whether to apply floor to remove decimal places.
+
+    Returns:
+    DataFrame: The DataFrame with negative values handled according to the specified operation.
+    """
+    if operation not in ['absolute', 'remove', 'zero', 'drop']:
+        logging.error("Invalid operation. Choose 'absolute', 'remove', 'zero', or 'drop'.")
+        return df
+
+    for column in columns:
+        if column not in df.columns:
+            logging.error(f"Column '{column}' not found in the DataFrame.")
+            continue  # Skip to the next column
+
+        try:
+            if operation == 'absolute':
+                # Convert negative values to positive using a conditional expression
+                df = df.withColumn(column, when(col(column) < 0, -col(column)).otherwise(col(column)))
+                logging.info(f"Successfully handled negative values in column '{column}' by converting to absolute values.")
+            
+            elif operation == 'remove':
+                # Set negative values to null
+                df = df.withColumn(column, when(col(column) >= 0, col(column)).otherwise(None))
+                logging.info(f"Successfully handled negative values in column '{column}' by setting them to null.")
+            
+            elif operation == 'zero':
+                # Set negative values to zero
+                df = df.withColumn(column, when(col(column) >= 0, col(column)).otherwise(0))
+                logging.info(f"Successfully handled negative values in column '{column}' by setting them to zero.")
+            
+            elif operation == 'drop':
+                # Drop rows with negative values
+                df = df.filter(col(column) >= 0)
+                logging.info(f"Successfully handled negative values in column '{column}' by dropping rows with negative values.")
+            
+            if apply_floor:
+                # Optionally remove decimal places by applying floor
+                df = df.withColumn(column, floor(col(column)))
+                logging.info(f"Applied floor operation to remove decimal places from column '{column}'.")
+
+        except Exception as e:
+            logging.error(f"Error handling negative values in column '{column}': {e}")
+
+    return df
 
 
+def remove_string_from_column(df: DataFrame, column_name: str, string_to_remove: str) -> DataFrame:
+    """
+    Removes all occurrences of a specified string from a given column in the DataFrame.
 
+    Parameters:
+    df (DataFrame): The input DataFrame.
+    column_name (str): The name of the column from which to remove the string.
+    string_to_remove (str): The string that needs to be removed from the column values.
 
+    Returns:
+    DataFrame: The DataFrame with the specified string removed from the specified column.
+    """
+    try:
+        # Replace the specified string with an empty string
+        df = df.withColumn(column_name, regexp_replace(col(column_name), string_to_remove, " "))
+        logging.info(f"Successfully removed '{string_to_remove}' from column '{column_name}'.")
 
-
-
-
-
+    except Exception as e:
+        logging.error(f"Error removing '{string_to_remove}' from column '{column_name}': {e}")
+    
+    return df
 
 
 
