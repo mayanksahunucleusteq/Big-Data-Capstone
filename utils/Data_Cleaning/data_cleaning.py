@@ -1,28 +1,12 @@
-import logging
-import os
 import re
 from pyspark.sql.types import StringType
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import mean, col, floor, date_format, to_date, when, udf, regexp_replace, lit
+from utils.logging_setup import setup_logging
 
 
-# Define log directory and file path
-log_dir = os.path.abspath('/spark-data/logs')
-log_file_path = os.path.join(log_dir, 'data_cleaning.log')
-
-# Create log directory if it doesn't exist
-os.makedirs(log_dir, exist_ok=True)
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_path),  # For logging to file
-        logging.StreamHandler()  # For logging to console
-    ]
-)
-
+# Call logging at the start of your script
+logger = setup_logging("/spark-data/logs/data_cleaning.log")
 
 
 #Removing Duplicate
@@ -40,12 +24,12 @@ def remove_duplicates(df: DataFrame, columns: list = None) -> DataFrame:
     try:
         if columns:
             df = df.dropDuplicates(columns)
-            logging.info(f"Successfully removed duplicate rows based on columns: {columns}.")
+            logger.info(f"Successfully removed duplicate rows based on columns: {columns}.")
         else:
             df = df.dropDuplicates()
-            logging.info("Successfully removed duplicate rows based on all columns.")
+            logger.info("Successfully removed duplicate rows based on all columns.")
     except Exception as e:
-        logging.error(f"Error removing duplicate rows: {e}")
+        logger.error(f"Error removing duplicate rows: {e}")
     
     return df
 
@@ -72,28 +56,28 @@ def impute_nulls(df: DataFrame, columns: list, method: str, value=None) -> DataF
         for column in columns:
             if method == 'constant':
                 df = df.fillna({column: value})
-                logging.info(f"Imputed nulls in column '{column}' with constant value: {value}")
+                logger.info(f"Imputed nulls in column '{column}' with constant value: {value}")
             
             elif method == 'mean':
                 mean_value = df.agg(mean(col(column))).collect()[0][0]
                 df = df.fillna({column: mean_value})
-                logging.info(f"Imputed nulls in column '{column}' with mean value: {mean_value}")
+                logger.info(f"Imputed nulls in column '{column}' with mean value: {mean_value}")
             
             elif method == 'median':
                 median_value = df.approxQuantile(column, [0.5], 0.01)[0]
                 df = df.fillna({column: median_value})
-                logging.info(f"Imputed nulls in column '{column}' with median value: {median_value}")
+                logger.info(f"Imputed nulls in column '{column}' with median value: {median_value}")
             
             elif method == 'mode':
                 mode_value = df.groupBy(column).count().orderBy('count', ascending=False).first()[0]
                 df = df.fillna({column: mode_value})
-                logging.info(f"Imputed nulls in column '{column}' with mode value: {mode_value}")
+                logger.info(f"Imputed nulls in column '{column}' with mode value: {mode_value}")
             
             else:
                 raise ValueError(f"Invalid method '{method}' for column '{column}'. Options are 'constant', 'mean', 'median', 'mode'")
 
     except Exception as e:
-        logging.error(f"Error imputing nulls in columns '{columns}' using method '{method}': {e}")
+        logger.error(f"Error imputing nulls in columns '{columns}' using method '{method}': {e}")
     
     return df
 
@@ -120,9 +104,9 @@ def drop_nulls(df: DataFrame, how: str = 'any', subset: list = None) -> DataFram
             df = df.dropna(how=how, subset=subset)
         else:
             df = df.dropna(how=how)
-        logging.info(f"Dropped rows/columns with null values using method '{how}'.")
+        logger.info(f"Dropped rows/columns with null values using method '{how}'.")
     except Exception as e:
-        logging.error(f"Error while dropping null values: {e}")
+        logger.error(f"Error while dropping null values: {e}")
     
     return df
 
@@ -156,10 +140,10 @@ def impute_missing_values(df: DataFrame, strategy: str = 'mean', value=None, col
                 raise ValueError("Invalid strategy. Options are 'mean', 'median', 'mode', or 'value'.")
             
             df = df.fillna({column: fill_value})
-            logging.info(f"Successfully imputed missing values in column '{column}' using strategy '{strategy}'.")
+            logger.info(f"Successfully imputed missing values in column '{column}' using strategy '{strategy}'.")
 
     except Exception as e:
-        logging.error(f"Error imputing missing values: {e}")
+        logger.error(f"Error imputing missing values: {e}")
     
     return df
 
@@ -180,12 +164,12 @@ def drop_missing_values(df: DataFrame, how: str = 'any', subset: list = None) ->
     try:
         if subset:
             df = df.dropna(how=how, subset=subset)
-            logging.info(f"Successfully dropped rows/columns with missing values based on subset: {subset}.")
+            logger.info(f"Successfully dropped rows/columns with missing values based on subset: {subset}.")
         else:
             df = df.dropna(how=how)
-            logging.info(f"Successfully dropped rows/columns with missing values based on the '{how}' criteria.")
+            logger.info(f"Successfully dropped rows/columns with missing values based on the '{how}' criteria.")
     except Exception as e:
-        logging.error(f"Error dropping missing values: {e}")
+        logger.error(f"Error dropping missing values: {e}")
     
     return df
 
@@ -202,21 +186,21 @@ def remove_decimal(df: DataFrame, columns: list) -> DataFrame:
     DataFrame: The DataFrame with decimal values removed from the specified columns.
     """
     if not isinstance(columns, list):
-        logging.error("Parameter 'columns' must be of type 'list'.")
+        logger.error("Parameter 'columns' must be of type 'list'.")
         return df
 
     for column in columns:
         if column not in df.columns:
-            logging.error(f"Column '{column}' not found in the DataFrame.")
+            logger.error(f"Column '{column}' not found in the DataFrame.")
             continue  # Skip to the next column
 
         try:
             # Use floor to remove decimal values while keeping the original type
             df = df.withColumn(column, floor(col(column)))
-            logging.info(f"Successfully removed decimal values from column '{column}'.")
+            logger.info(f"Successfully removed decimal values from column '{column}'.")
 
         except Exception as e:
-            logging.error(f"Error removing decimal values from column '{column}': {e}")
+            logger.error(f"Error removing decimal values from column '{column}': {e}")
 
     return df
 
@@ -235,7 +219,7 @@ def standardize_date_format(df: DataFrame, column: str, format: str = 'yyyy-MM-d
     """
 
     if column not in df.columns:
-        logging.error(f"Column '{column}' not found in DataFrame.")
+        logger.error(f"Column '{column}' not found in DataFrame.")
         return df
 
     try:
@@ -260,10 +244,10 @@ def standardize_date_format(df: DataFrame, column: str, format: str = 'yyyy-MM-d
         # Handle cases where conversion failed
         df = df.withColumn(column, when(col(column).isNull(), 'Invalid Date').otherwise(col(column)))
 
-        logging.info(f"Successfully standardized date format in column '{column}' to '{format}'.")
+        logger.info(f"Successfully standardized date format in column '{column}' to '{format}'.")
 
     except Exception as e:
-        logging.error(f"Error standardizing date format: {e}")
+        logger.error(f"Error standardizing date format: {e}")
 
     return df
 
@@ -284,7 +268,7 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
         try:
             # If phone is "Not Available", return it as is
             if phone == "Not Available":
-                logging.info(f"Phone number '{phone}' is 'Not Available'. No changes made.")
+                logger.info(f"Phone number '{phone}' is 'Not Available'. No changes made.")
                 return phone
             
             # Remove unwanted characters and handle extensions
@@ -293,7 +277,7 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             # Identify and separate extensions
             match = re.match(r'^(\d+)([Xx]\d+)?$', phone)
             if not match:
-                logging.warning(f"Invalid phone number format detected: '{phone}'")
+                logger.warning(f"Invalid phone number format detected: '{phone}'")
                 return "Invalid phone number"
             
             phone, extension = match.groups()
@@ -307,7 +291,7 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             elif len(phone) == 12 and phone.startswith('001'):
                 formatted_phone = f"+1 ({phone[3:6]}) {phone[6:9]}-{phone[9:]}"
             else:
-                logging.warning(f"Phone number '{phone}' is invalid after cleaning.")
+                logger.warning(f"Phone number '{phone}' is invalid after cleaning.")
                 return "Invalid phone number"
             
             if extension:
@@ -317,11 +301,11 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             if not formatted_phone.startswith("+1"):
                 formatted_phone = "+1 " + formatted_phone
             
-            logging.info(f"Successfully cleaned phone number to '{formatted_phone}'")
+            logger.info(f"Successfully cleaned phone number to '{formatted_phone}'")
             return formatted_phone
 
         except Exception as e:
-            logging.error(f"Error cleaning phone number '{phone}': {e}")
+            logger.error(f"Error cleaning phone number '{phone}': {e}")
             return "Invalid phone number"
 
     # Register the UDF
@@ -330,9 +314,9 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
     # Apply the UDF to clean the phone numbers
     try:
         df_cleaned = df.withColumn(phone_col, format_phone_number_udf(col(phone_col)))
-        logging.info(f"Phone numbers in column '{phone_col}' cleaned successfully.")
+        logger.info(f"Phone numbers in column '{phone_col}' cleaned successfully.")
     except Exception as e:
-        logging.error(f"Error applying cleaning function to column '{phone_col}': {e}")
+        logger.error(f"Error applying cleaning function to column '{phone_col}': {e}")
         raise
 
     return df_cleaned
@@ -353,42 +337,42 @@ def handle_negative_values(df: DataFrame, columns: list, operation: str = 'absol
     DataFrame: The DataFrame with negative values handled according to the specified operation.
     """
     if operation not in ['absolute', 'remove', 'zero', 'drop']:
-        logging.error("Invalid operation. Choose 'absolute', 'remove', 'zero', or 'drop'.")
+        logger.error("Invalid operation. Choose 'absolute', 'remove', 'zero', or 'drop'.")
         return df
 
     for column in columns:
         if column not in df.columns:
-            logging.error(f"Column '{column}' not found in the DataFrame.")
+            logger.error(f"Column '{column}' not found in the DataFrame.")
             continue  # Skip to the next column
 
         try:
             if operation == 'absolute':
                 # Convert negative values to positive using a conditional expression
                 df = df.withColumn(column, when(col(column) < 0, -col(column)).otherwise(col(column)))
-                logging.info(f"Successfully handled negative values in column '{column}' by converting to absolute values.")
+                logger.info(f"Successfully handled negative values in column '{column}' by converting to absolute values.")
             
             elif operation == 'remove':
                 # Set negative values to null
                 df = df.withColumn(column, when(col(column) >= 0, col(column)).otherwise(None))
-                logging.info(f"Successfully handled negative values in column '{column}' by setting them to null.")
+                logger.info(f"Successfully handled negative values in column '{column}' by setting them to null.")
             
             elif operation == 'zero':
                 # Set negative values to zero
                 df = df.withColumn(column, when(col(column) >= 0, col(column)).otherwise(0))
-                logging.info(f"Successfully handled negative values in column '{column}' by setting them to zero.")
+                logger.info(f"Successfully handled negative values in column '{column}' by setting them to zero.")
             
             elif operation == 'drop':
                 # Drop rows with negative values
                 df = df.filter(col(column) >= 0)
-                logging.info(f"Successfully handled negative values in column '{column}' by dropping rows with negative values.")
+                logger.info(f"Successfully handled negative values in column '{column}' by dropping rows with negative values.")
             
             if apply_floor:
                 # Optionally remove decimal places by applying floor
                 df = df.withColumn(column, floor(col(column)))
-                logging.info(f"Applied floor operation to remove decimal places from column '{column}'.")
+                logger.info(f"Applied floor operation to remove decimal places from column '{column}'.")
 
         except Exception as e:
-            logging.error(f"Error handling negative values in column '{column}': {e}")
+            logger.error(f"Error handling negative values in column '{column}': {e}")
 
     return df
 
@@ -408,10 +392,10 @@ def remove_string_from_columns(df: DataFrame, columns: list, string_to_remove: s
     try:
         for column_name in columns:
             df = df.withColumn(column_name, regexp_replace(col(column_name), string_to_remove, " "))
-            logging.info(f"Successfully removed '{string_to_remove}' from column '{column_name}'.")
+            logger.info(f"Successfully removed '{string_to_remove}' from column '{column_name}'.")
 
     except Exception as e:
-        logging.error(f"Error removing '{string_to_remove}' from columns {columns}: {e}")
+        logger.error(f"Error removing '{string_to_remove}' from columns {columns}: {e}")
     
     return df
 
@@ -445,7 +429,7 @@ def validate_emails(df: DataFrame, column: str, invalid_message: str) -> DataFra
             else:
                 return invalid_message
         except Exception as e:
-            logging.error(f"Error validating email '{email}': {e}")
+            logger.error(f"Error validating email '{email}': {e}")
             return invalid_message
 
     # Register the UDF
@@ -454,9 +438,9 @@ def validate_emails(df: DataFrame, column: str, invalid_message: str) -> DataFra
     try:
         # Apply the UDF to the DataFrame
         df = df.withColumn(column, validate_email(col(column)))
-        logging.info(f"Successfully validated email addresses in column '{column}'.")
+        logger.info(f"Successfully validated email addresses in column '{column}'.")
     except Exception as e:
-        logging.error(f"Error validating emails in column '{column}': {e}")
+        logger.error(f"Error validating emails in column '{column}': {e}")
     
     return df
 
@@ -478,10 +462,10 @@ def count_nulls_in_column(df: DataFrame, column_name: str) -> int:
             (col(column_name).isNull()) | (col(column_name) == lit('null'))
         ).count()
 
-        logging.info(f"Count of null values and 'null' strings in column '{column_name}': {null_count}")
+        logger.info(f"Count of null values and 'null' strings in column '{column_name}': {null_count}")
 
     except Exception as e:
-        logging.error(f"Error counting null values in column '{column_name}': {e}")
+        logger.error(f"Error counting null values in column '{column_name}': {e}")
         raise
 
     return null_count

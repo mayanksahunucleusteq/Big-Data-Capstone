@@ -1,24 +1,15 @@
 import shutil
 import os
-import logging
-from pyspark.sql import DataFrame
-
-#Log Directory
-log_dir = '/spark-data/logs'
-os.makedirs(log_dir, exist_ok=True)
-log_file_path = os.path.join(log_dir, 'save_file.log')
+from pyspark.sql import  DataFrame
+from utils.logging_setup import setup_logging
 
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', 
-                    handlers=[
-        logging.FileHandler(log_file_path), #for showing logs into file
-        logging.StreamHandler() #For showing logs to console
-    ])
+# Call logging at the start of your script
+logger = setup_logging("/spark-data/logs/save_file.log")
 
 def save_file(df: DataFrame, output_dir: str, file_name: str, file_format: str = "csv", **options) -> str:
     """
-    Save a Spark DataFrame as a single file in the specified format with error handling and logging.
+    Save a Spark DataFrame as a single file in the specified format with error handling and logger.
 
     :param df: The Spark DataFrame to save.
     :param output_dir: The directory where the file will be saved.
@@ -31,9 +22,9 @@ def save_file(df: DataFrame, output_dir: str, file_name: str, file_format: str =
     
     try:
         # Coalesce to a single partition to save as one file
-        logging.info("Saving DataFrame to temporary directory...")
+        logger.info("Saving DataFrame to temporary directory...")
         df.coalesce(1).write.mode('overwrite').format(file_format).options(**options).save(temp_dir)
-        logging.info("DataFrame saved successfully to temporary directory.")
+        logger.info("DataFrame saved successfully to temporary directory.")
         
         # Get the file generated in the temporary directory
         temp_file = next(file for file in os.listdir(temp_dir) if file.endswith(f'.{file_format}'))
@@ -41,17 +32,17 @@ def save_file(df: DataFrame, output_dir: str, file_name: str, file_format: str =
         # Move and rename the file to the final output path
         final_output_path = os.path.join(output_dir, file_name + f'.{file_format}')
         shutil.move(os.path.join(temp_dir, temp_file), final_output_path)
-        logging.info(f"File moved to final output path: {final_output_path}")
+        logger.info(f"File moved to final output path: {final_output_path}")
         
         # Remove the temporary directory
         shutil.rmtree(temp_dir)
-        logging.info(f"Temporary directory removed: {temp_dir}")
+        logger.info(f"Temporary directory removed: {temp_dir}")
 
         return final_output_path
 
     except Exception as e:
-        logging.error(f"Error saving DataFrame to file: {e}")
+        logger.error(f"Error saving DataFrame to file: {e}")
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
-            logging.info(f"Temporary directory removed due to error: {temp_dir}")
+            logger.info(f"Temporary directory removed due to error: {temp_dir}")
        
