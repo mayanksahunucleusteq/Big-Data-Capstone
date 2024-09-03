@@ -1,8 +1,7 @@
 import shutil
 import os
-from pyspark.sql import  DataFrame
+from pyspark.sql import DataFrame
 from utils.logging_setup import setup_logging
-
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/save_file.log")
@@ -21,6 +20,13 @@ def save_file(df: DataFrame, output_dir: str, file_name: str, file_format: str =
     temp_dir = os.path.join(output_dir, "temp_dir")
     
     try:
+        # Ensure the output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Add header option for CSV format
+        if file_format.lower() == 'csv':
+            options['header'] = 'true'
+        
         # Coalesce to a single partition to save as one file
         logger.info("Saving DataFrame to temporary directory...")
         df.coalesce(1).write.mode('overwrite').format(file_format).options(**options).save(temp_dir)
@@ -45,4 +51,4 @@ def save_file(df: DataFrame, output_dir: str, file_name: str, file_format: str =
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
             logger.info(f"Temporary directory removed due to error: {temp_dir}")
-       
+        raise
