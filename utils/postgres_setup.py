@@ -3,7 +3,7 @@ from utils.logging_setup import setup_logging
 # Call logger at the start of your script
 logger = setup_logging("/spark-data/logs/postgres_setup.log")
 
-
+#Function for save dataframe into the database
 def save_dfs_to_postgres(spark, jdbc_url, properties, **dataframes):
     """
     Save multiple DataFrames to PostgreSQL, using DataFrame variable names as table names.
@@ -23,6 +23,7 @@ def save_dfs_to_postgres(spark, jdbc_url, properties, **dataframes):
             print(f"An error occurred while saving {table_name}: {e}")
             raise
 
+#Load all tables from DB into Dataframe
 def load_all_tables(spark, jdbc_url, properties):
     """
     Load all tables from PostgreSQL into DataFrames.
