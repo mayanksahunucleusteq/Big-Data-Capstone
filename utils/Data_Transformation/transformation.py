@@ -1,13 +1,14 @@
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
-from pyspark.sql.functions import col, current_date, datediff, floor, coalesce, lit
+from pyspark.sql.functions import to_date, col, current_date, datediff, floor, regexp_extract, col
+from pyspark.sql.types import StringType
 from utils.logging_setup import setup_logging
 
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/data_transformation.log")
 
-#Add Age column 
+#Add Age column in Customer Table
 def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
     """
     Add an 'age' column to the DataFrame by calculating the age based on the specified birth date column.
@@ -24,7 +25,15 @@ def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
             logger.error(f"The specified birth date column '{birth_date_column}' does not exist in the DataFrame.")
             raise ValueError(f"The specified birth date column '{birth_date_column}' does not exist in the DataFrame.")
         
-        logger.info(f"Column '{birth_date_column}' found. Calculating age...")
+        logger.info(f"Column '{birth_date_column}' found. Calculating age and also ensure that birth date column is date type if it is a string type then convert this into date type")
+
+        # Check if the birth_date_column is of string type and convert it to date type if necessary
+        if isinstance(df.schema[birth_date_column].dataType, StringType):
+            df = df.withColumn(
+                birth_date_column,
+                to_date(col(birth_date_column), "yyyy-MM-dd")  # Adjust the format as needed
+            )
+            logger.info(f"Column '{birth_date_column}' converted to date format.")
 
         # Calculate age
         df = df.withColumn(
@@ -39,51 +48,46 @@ def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
         logger.error(f"Error adding age column: {e}")
         raise
     
-
-#CLV(Customer Life Time Value Calculation(Like how much he spend on our platform))
-def add_clv_column(customers_df: DataFrame, orders_df: DataFrame, total_amount_column: str, customer_id_column: str = "customer_id") -> DataFrame:
+#Add states columns to Orders Table    
+def add_state_columns(df: DataFrame, shipping_col: str, billing_col: str) -> DataFrame:
     """
-    Adds a 'CLV' (Customer Lifetime Value) column to the customers DataFrame by calculating 
-    the sum of the total amounts from the orders DataFrame for each customer.
+    Add 'shipping_state' and 'billing_state' columns to the DataFrame by extracting state abbreviations
+    from the specified shipping and billing address columns.
 
-    :param customers_df: DataFrame containing customer information.
-    :param orders_df: DataFrame containing order information.
-    :param total_amount_column: The name of the column in orders_df that contains the total amount.
-    :param customer_id_column: The name of the column used to join the DataFrames (default is 'customer_id').
-    :return: DataFrame with the added 'CLV' column.
+    :param df: The Spark DataFrame to modify.
+    :param shipping_col: The name of the column containing shipping addresses.
+    :param billing_col: The name of the column containing billing addresses.
+    :return: The DataFrame with the added 'shipping_state' and 'billing_state' columns.
     """
-    logger.info("Starting to add 'CLV' column to the customers DataFrame.")
-    
+    logger.info("Starting to add state columns based on the specified address columns.")
+
     try:
-        # Ensure the necessary columns exist in both DataFrames
-        if customer_id_column not in customers_df.columns:
-            logger.error(f"The specified customer ID column '{customer_id_column}' does not exist in the customers DataFrame.")
-            raise ValueError(f"The specified customer ID column '{customer_id_column}' does not exist in the customers DataFrame.")
+        # Ensure the required columns exist in the DataFrame
+        if shipping_col not in df.columns:
+            logger.error(f"Column '{shipping_col}' not found in DataFrame.")
+            raise ValueError(f"The DataFrame must contain '{shipping_col}' column.")
+        if billing_col not in df.columns:
+            logger.error(f"Column '{billing_col}' not found in DataFrame.")
+            raise ValueError(f"The DataFrame must contain '{billing_col}' column.")
         
-        if customer_id_column not in orders_df.columns or total_amount_column not in orders_df.columns:
-            logger.error(f"The specified customer ID or total amount column does not exist in the orders DataFrame.")
-            raise ValueError(f"The specified customer ID or total amount column does not exist in the orders DataFrame.")
-        
-        logger.info("Columns validated. Proceeding with CLV calculation.")
-        
-        # Calculate CLV by summing total amounts for each customer
-        clv_df = orders_df.groupBy(customer_id_column).agg(
-            F.sum(col(total_amount_column)).alias("CLV")
+        logger.info(f"Columns '{shipping_col}' and '{billing_col}' found. Extracting state abbreviations...")
+
+        # Extract state abbreviations from the address columns
+        df = df.withColumn(
+            "shipping_state",
+            regexp_extract(col(shipping_col), r'\b([A-Z]{2})\b', 1)
         )
-        
-        # Join the CLV back to the customers DataFrame
-        customers_df = customers_df.join(clv_df, customer_id_column, "left")
-        
-        # Replace null values in the 'CLV' column with 0
-        customers_df = customers_df.withColumn("CLV", coalesce(col("CLV"), lit(0)))
-        
-        logger.info("'CLV' column added successfully, with null values replaced by 0.")
-        return customers_df
-    
+        logger.info(f"Extracted 'shipping_state' from column '{shipping_col}'.")
+
+        df = df.withColumn(
+            "billing_state",
+            regexp_extract(col(billing_col), r'\b([A-Z]{2})\b', 1)
+        )
+        logger.info(f"Extracted 'billing_state' from column '{billing_col}'.")
+
+        logger.info("State columns added successfully.")
+        return df
+
     except Exception as e:
-        logger.error(f"Error adding 'CLV' column: {e}")
+        logger.error(f"Error adding state columns: {e}")
         raise
-
-
-
-
