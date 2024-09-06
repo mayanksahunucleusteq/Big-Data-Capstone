@@ -17,9 +17,8 @@ def get_sheet_names(file_path):
         logger.error(f"Error loading Excel workbook: {file_path} - {e}")
         return []
 
-def load_files(spark):
+def load_files(spark, folder_path):
 
-    folder_path = "/spark-data/Data_Files"
     dataframes = {}
 
     for filename in os.listdir(folder_path):

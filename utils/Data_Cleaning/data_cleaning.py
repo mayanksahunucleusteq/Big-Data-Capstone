@@ -7,7 +7,7 @@ from utils.logging_setup import setup_logging
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/data_cleaning.log")
-
+print(logger)
 
 #Removing Duplicate
 def remove_duplicates(df: DataFrame, columns: list = None) -> DataFrame:
