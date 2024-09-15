@@ -1,13 +1,19 @@
-import re
-from pyspark.sql.types import StringType
+import re, os
+import logging
+from pyspark.sql.types import *
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import mean, col, floor, date_format, to_date, when, udf, regexp_replace, lit
+from pyspark.sql.functions import *
 from utils.logging_setup import setup_logging
+from typing import Callable, Dict
+from typing import Any
+from fpdf import FPDF
 
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/data_cleaning.log")
-print(logger)
+report_folder = "/spark-data/Report"
+logger.setLevel(logging.INFO)
+
 
 #Removing Duplicate
 def remove_duplicates(df: DataFrame, columns: list = None) -> DataFrame:
@@ -82,33 +88,44 @@ def impute_nulls(df: DataFrame, columns: list, method: str, value=None) -> DataF
     return df
 
 #Drop null values
-def drop_nulls(df: DataFrame, how: str = 'any', subset: list = None) -> DataFrame:
+def drop_nulls(df: DataFrame, columns: list = None, archive_folder: str = None, archive_df_name: str = None) -> DataFrame:
     """
-    Drops rows or columns with null values, including 'null' strings.
+    Drops rows with null values, including 'null' strings and empty strings, and archives the removed rows.
     
     Parameters:
     df (DataFrame): The input DataFrame.
-    how (str): Criteria for dropping ('any' or 'all').
-    subset (list, optional): List of column names to consider for dropping.
+    columns (list, optional): List of column names to consider for dropping.
+    archive_folder (str, optional): Path to the archive folder for saving removed rows.
+    df_name (str, optional): The name of the DataFrame for archiving purposes.
     
     Returns:
-    DataFrame: The DataFrame with rows or columns dropped.
+    DataFrame: The DataFrame with rows dropped.
     """
-    # Convert 'null' strings to actual nulls
+    # Convert 'null', 'None', and empty strings to actual nulls
     for column in df.columns:
         df = df.withColumn(column, when(col(column).isin('null', 'None', ''), None).otherwise(col(column)))
 
-    # Drop rows or columns with null values
+    # Archive rows that are going to be dropped
+    rows_to_remove = df.filter(df[columns[0]].isNull()) if columns else df.filter(df.isNull())
+
+    if archive_folder and archive_df_name and not rows_to_remove.isEmpty():
+        # Define the archive path and save the removed rows to CSV
+        archive_path = os.path.join(archive_folder, f'df_{archive_df_name}_removed.csv')
+        rows_to_remove.coalesce(1).write.csv(archive_path, header=True, mode='overwrite')
+        logger.info(f"Archived removed rows to {archive_path}")
+
+    # Drop rows with null values
     try:
-        if subset:
-            df = df.dropna(how=how, subset=subset)
+        if columns:
+            df_cleaned = df.dropna(subset=columns)
         else:
-            df = df.dropna(how=how)
-        logger.info(f"Dropped rows/columns with null values using method '{how}'.")
+            df_cleaned = df.dropna()
+        logger.info(f"Dropped rows with null values.")
     except Exception as e:
         logger.error(f"Error while dropping null values: {e}")
-    
-    return df
+        raise
+
+    return df_cleaned
 
 #Handel Missing Values
 def impute_missing_values(df: DataFrame, strategy: str = 'mean', value=None, columns: list = None) -> DataFrame:
@@ -147,32 +164,6 @@ def impute_missing_values(df: DataFrame, strategy: str = 'mean', value=None, col
     
     return df
 
-#Drop Missing Values row
-def drop_missing_values(df: DataFrame, how: str = 'any', subset: list = None) -> DataFrame:
-    """
-    Drops rows or columns with missing values from the DataFrame.
-    
-    Parameters:
-    df (DataFrame): The input DataFrame.
-    how (str): Criteria for dropping. Options are 'any' (drop rows/columns with any missing values) or 'all' (drop rows/columns with all missing values).
-    subset (list, optional): List of column names to consider for dropping. If None, all columns are considered.
-    
-    Returns:
-    DataFrame: The DataFrame with rows or columns dropped.
-    """
-
-    try:
-        if subset:
-            df = df.dropna(how=how, subset=subset)
-            logger.info(f"Successfully dropped rows/columns with missing values based on subset: {subset}.")
-        else:
-            df = df.dropna(how=how)
-            logger.info(f"Successfully dropped rows/columns with missing values based on the '{how}' criteria.")
-    except Exception as e:
-        logger.error(f"Error dropping missing values: {e}")
-    
-    return df
-
 #Remove decimal
 def remove_decimal(df: DataFrame, columns: list) -> DataFrame:
     """
@@ -185,9 +176,6 @@ def remove_decimal(df: DataFrame, columns: list) -> DataFrame:
     Returns:
     DataFrame: The DataFrame with decimal values removed from the specified columns.
     """
-    if not isinstance(columns, list):
-        logger.error("Parameter 'columns' must be of type 'list'.")
-        return df
 
     for column in columns:
         if column not in df.columns:
@@ -234,31 +222,39 @@ def standardize_date_format(df: DataFrame, column: str, format: str = 'yyyy-MM-d
             "dd-MMM-yyyy"
         ]
 
-        # Try parsing the date with each format
-        for fmt in date_formats:
-            df = df.withColumn(column, to_date(col(column), fmt))
-        
-        # Format the date to the standard format
-        df = df.withColumn(column, date_format(col(column), format))
+        # Initialize a column with null values
+        df = df.withColumn('parsed_date', lit(None).cast("date"))
 
-        # Handle cases where conversion failed
-        df = df.withColumn(column, when(col(column).isNull(), 'Invalid Date').otherwise(col(column)))
+        # Try parsing the date with each format in sequence
+        for fmt in date_formats:
+            df = df.withColumn(
+                'parsed_date',
+                when(col('parsed_date').isNull(), to_date(col(column), fmt)).otherwise(col('parsed_date'))
+            )
+        
+        # Replace the original column with the parsed date
+        df = df.withColumn(column, when(col('parsed_date').isNotNull(), date_format(col('parsed_date'), format))
+                          .otherwise('Invalid Date'))
+
+        # Drop the helper 'parsed_date' column
+        df = df.drop('parsed_date')
 
         logger.info(f"Successfully standardized date format in column '{column}' to '{format}'.")
 
     except Exception as e:
         logger.error(f"Error standardizing date format: {e}")
+        raise
 
     return df
 
 #Phone number handeling
-def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
+def clean_phone_numbers(df: DataFrame, column: str) -> DataFrame:
     """
     Cleans and formats phone numbers in the specified column of a DataFrame.
     
     Parameters:
     df (DataFrame): The input DataFrame.
-    phone_col (str): The name of the column containing phone numbers to clean.
+    column (str): The name of the column containing phone numbers to clean.
     
     Returns:
     DataFrame: The DataFrame with cleaned and formatted phone numbers.
@@ -268,7 +264,6 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
         try:
             # If phone is "Not Available", return it as is
             if phone == "Not Available":
-                logger.info(f"Phone number '{phone}' is 'Not Available'. No changes made.")
                 return phone
             
             # Remove unwanted characters and handle extensions
@@ -277,7 +272,6 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             # Identify and separate extensions
             match = re.match(r'^(\d+)([Xx]\d+)?$', phone)
             if not match:
-                logger.warning(f"Invalid phone number format detected: '{phone}'")
                 return "Invalid phone number"
             
             phone, extension = match.groups()
@@ -291,7 +285,6 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             elif len(phone) == 12 and phone.startswith('001'):
                 formatted_phone = f"+1 ({phone[3:6]}) {phone[6:9]}-{phone[9:]}"
             else:
-                logger.warning(f"Phone number '{phone}' is invalid after cleaning.")
                 return "Invalid phone number"
             
             if extension:
@@ -301,7 +294,6 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
             if not formatted_phone.startswith("+1"):
                 formatted_phone = "+1 " + formatted_phone
             
-            logger.info(f"Successfully cleaned phone number to '{formatted_phone}'")
             return formatted_phone
 
         except Exception as e:
@@ -311,16 +303,23 @@ def clean_phone_numbers(df: DataFrame, phone_col: str) -> DataFrame:
     # Register the UDF
     format_phone_number_udf = udf(format_phone_number, StringType())
     
+    # Temporarily disable logging to suppress messages during DataFrame display
+    original_level = logger.level
+    logger.setLevel(logging.ERROR)
+    
     # Apply the UDF to clean the phone numbers
     try:
-        df_cleaned = df.withColumn(phone_col, format_phone_number_udf(col(phone_col)))
-        logger.info(f"Phone numbers in column '{phone_col}' cleaned successfully.")
+        df_cleaned = df.withColumn(column, format_phone_number_udf(col(column)))
     except Exception as e:
-        logger.error(f"Error applying cleaning function to column '{phone_col}': {e}")
+        logger.error(f"Error applying cleaning function to column '{column}': {e}")
         raise
-
+    finally:
+        # Restore the original logging level
+        logger.setLevel(original_level)
+    
     return df_cleaned
 
+#Handle negative values
 def handle_negative_values(df: DataFrame, columns: list, operation: str = 'absolute', apply_floor: bool = False) -> DataFrame:
     """
     Handles negative values in specific columns of the DataFrame, with options to convert, remove (set to null), 
@@ -391,7 +390,7 @@ def remove_string_from_columns(df: DataFrame, columns: list, string_to_remove: s
     """
     try:
         for column_name in columns:
-            df = df.withColumn(column_name, regexp_replace(col(column_name), string_to_remove, " "))
+            df = df.withColumn(column_name, regexp_replace(col(column_name), string_to_remove, ""))
             logger.info(f"Successfully removed '{string_to_remove}' from column '{column_name}'.")
 
     except Exception as e:
@@ -445,7 +444,7 @@ def validate_emails(df: DataFrame, column: str, invalid_message: str) -> DataFra
     return df
 
 #Null counts
-def count_nulls_in_column(df: DataFrame, column_name: str) -> int:
+def count_nulls_in_column(df: DataFrame, column: str) -> int:
     """
     Counts the number of null values and string 'null' in a specified column of the DataFrame.
 
@@ -459,15 +458,248 @@ def count_nulls_in_column(df: DataFrame, column_name: str) -> int:
     try:
         # Count null values and string 'null'
         null_count = df.filter(
-            (col(column_name).isNull()) | (col(column_name) == lit('null'))
+            (col(column).isNull()) | (col(column) == lit('null'))
         ).count()
 
-        logger.info(f"Count of null values and 'null' strings in column '{column_name}': {null_count}")
+        logger.info(f"Count of null values and 'null' strings in column '{column}': {null_count}")
 
     except Exception as e:
-        logger.error(f"Error counting null values in column '{column_name}': {e}")
+        logger.error(f"Error counting null values in column '{column}': {e}")
         raise
 
     return null_count
 
+#Type Conversion If needed
+def convert_column_type(df: DataFrame, column: str, target_type: str) -> DataFrame:
+    """
+    Converts the data type of a specified column in a DataFrame with logging and error handling.
+    
+    Parameters:
+    df (DataFrame): The input DataFrame.
+    column (str): The column name to convert.
+    target_type (str): The target data type to convert the column to.
+    
+    Returns:
+    DataFrame: The DataFrame with the specified column's type converted.
+    """
+    try:
+        # Attempt to convert the column to the desired type
+        df = df.withColumn(column, col(column).cast(target_type))
+        logger.info(f"Successfully converted column '{column}' to type '{target_type}'")
+    except Exception as e:
+        logger.error(f"Error converting column '{column}' to type '{target_type}': {e}")
+        raise ValueError(f"Failed to convert column '{column}' to type '{target_type}'") from e
+    
+    return df
+
+# Wrapper Function That will help to create cleaning pipeline
+def apply_cleaning_step(df: DataFrame, step_func: Callable, **kwargs) -> DataFrame:
+    """
+    Apply a single cleaning function to the DataFrame with specific parameters.
+
+    Parameters:
+    df (DataFrame): The input DataFrame.
+    step_func (Callable): The cleaning function to apply.
+    kwargs: Additional keyword arguments for the cleaning function.
+
+    Returns:
+    DataFrame: The cleaned DataFrame after applying the function, or the original DataFrame if no operation was applied.
+    """
+    try:
+        logger.info(f"Applying {step_func.__name__} with params {kwargs}")
+        
+        # Apply the function only if parameters are passed, otherwise log a skip message
+        if not kwargs:
+            logger.warning(f"No parameters provided for {step_func.__name__}, skipping.")
+            return df
+
+        cleaned_df = step_func(df, **kwargs)
+        
+        if cleaned_df is not None and not cleaned_df.isEmpty():
+            return cleaned_df
+        else:
+            logger.warning(f"Step {step_func.__name__} did not apply any changes.")
+            return df
+        
+    except Exception as e:
+        logger.error(f"Error while applying {step_func.__name__}: {str(e)}")
+        raise
+
+def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, DataFrame]:
+    """
+    Applies a data cleaning pipeline to multiple DataFrames based on configuration and generates combined reports.
+
+    Parameters:
+    dfs (Dict[str, DataFrame]): A dictionary of DataFrames to clean, where keys are DataFrame names.
+    cleaning_config (Dict[str, Dict[str, Dict[str, Any]]]): A dictionary specifying cleaning steps for each DataFrame.
+    
+    Returns:
+    Dict[str, DataFrame]: A dictionary of cleaned DataFrames.
+    """
+    cleaned_dfs = {}
+    all_summaries = {}  # Dictionary to store before and after summaries for all DataFrames
+
+    for df_name, df in dfs.items():
+        logger.info(f"Starting cleaning process for {df_name}")
+        
+        # Get summary before cleaning
+        before_cleaning_summary = get_dataframe_summary(df)
+
+        if df_name in cleaning_config:
+            steps = cleaning_config[df_name]
+            for step_name, step_params in steps.items():
+                try:
+                    # Fetch the cleaning function
+                    step_func = globals().get(step_name)
+                    
+                    if step_func:
+                        # Handle multiple sets of parameters
+                        if isinstance(step_params, list):
+                            for param_set in step_params:
+                                df = apply_cleaning_step(df, step_func, **param_set)
+                        else:
+                            df = apply_cleaning_step(df, step_func, **step_params)
+                    else:
+                        logger.warning(f"Cleaning function {step_name} not found for {df_name}, skipping.")
+                except Exception as e:
+                    logger.error(f"Error while applying {step_name} to {df_name}: {str(e)}", exc_info=True)
+                    raise
+        else:
+            logger.info(f"No cleaning steps configured for {df_name}, skipping.")
+        
+        # Get summary after cleaning
+        after_cleaning_summary = get_dataframe_summary(df)
+
+        # Store summaries for this DataFrame
+        all_summaries[df_name] = (before_cleaning_summary, after_cleaning_summary)
+
+        cleaned_dfs[df_name] = df
+        logger.info(f"Completed cleaning process for {df_name}")
+
+    # Generate separate reports for before and after cleaning
+    before_and_after_report_path = f"{report_folder}/combined_cleaning_report.pdf"
+    generate_combined_cleaning_report(all_summaries, before_and_after_report_path)
+    logger.info(f"Data cleaning reports saved to {before_and_after_report_path}")
+
+    return cleaned_dfs
+
+#Report generation code:
+def get_dataframe_summary(df: DataFrame) -> dict:
+    """
+    Calculate various summary metrics for the DataFrame.
+
+    Metrics:
+    - Row and column counts
+    - Null counts
+    - Duplicate counts
+    - Data types
+
+    Returns:
+    dict: Summary metrics
+    """
+    # Total rows and columns
+    row_count = df.count()
+    column_count = len(df.columns)
+
+    # Duplicate counts
+    duplicate_count = df.count() - df.dropDuplicates().count()
+
+    # Data types
+    column_data_types = {field.name: str(field.dataType) for field in df.schema.fields}
+
+    summary = {
+        "row_count": row_count,
+        "column_count": column_count,
+        "duplicate_count": duplicate_count,
+        "data_types": column_data_types
+    }
+
+    return summary
+
+def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
+    """
+    Generate a PDF report summarizing the cleaning process for multiple DataFrames, 
+    including metrics before and after cleaning.
+
+    Parameters:
+    all_summaries (dict): A dictionary where keys are DataFrame names, and values are tuples (before_cleaning, after_cleaning)
+    output_path (str): Path to save the combined PDF report
+    """
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, 'Data Cleaning Report', 0, 1, 'C')
+
+        def chapter_title(self, title):
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, title, 0, 1, 'L')
+            self.ln(5)
+
+        def chapter_body(self, body):
+            self.set_font('Arial', '', 12)
+            self.multi_cell(0, 10, body)
+            self.ln()
+
+        def add_table(self, table_data):
+            self.set_font('Arial', 'B', 12)
+            col_widths = [40, 20, 20, 20, 20, 20, 20, 25, 25]
+            
+            for i, header in enumerate(table_data[0]):
+                self.cell(col_widths[i], 10, header, 1, 0, 'C')
+            self.ln()
+            
+            self.set_font('Arial', '', 12)
+            for row in table_data[1:]:
+                for i, item in enumerate(row):
+                    self.cell(col_widths[i], 10, str(item), 1, 0, 'C')
+                self.ln()
+
+    # Create instance of FPDF class
+    pdf = PDF()
+    pdf.add_page()
+    
+    # Table Headers for before cleaning
+    table_data_before = [
+        ["DataFrame", "Rows Before", "Columns Before", "Duplicates Before"]
+    ]
+    
+    # Table Headers for after cleaning
+    table_data_after = [
+        ["DataFrame", "Rows After", "Columns After", "Duplicates After"]
+    ]
+    
+    for df_name, (before_cleaning, after_cleaning) in all_summaries.items():
+        # Safely handle duplicate counts
+        duplicates_before = before_cleaning.get('duplicate_count', 0)
+        duplicates_after = after_cleaning.get('duplicate_count', 0)
+
+        # Prepare row data for each DataFrame before cleaning
+        row_before = [
+            df_name,
+            before_cleaning['row_count'],
+            before_cleaning['column_count'],
+            duplicates_before
+        ]
+        table_data_before.append(row_before)
+
+        # Prepare row data for each DataFrame after cleaning
+        row_after = [
+            df_name,
+            after_cleaning['row_count'],
+            after_cleaning['column_count'],
+            duplicates_after
+        ]
+        table_data_after.append(row_after)
+
+    # Add tables to PDF
+    pdf.chapter_title('Summary Before Cleaning')
+    pdf.add_table(table_data_before)
+
+    pdf.add_page()  # Add a new page for the second section
+
+    pdf.chapter_title('Summary After Cleaning')
+    pdf.add_table(table_data_after)
+    
+    # Save the combined PDF
+    pdf.output(output_path)
 

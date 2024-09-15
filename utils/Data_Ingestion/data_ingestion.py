@@ -8,6 +8,46 @@ from utils.logging_setup import setup_logging
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/data_ingestion.log")
 
+# Function to check if the file is empty
+def is_file_empty(spark, file_path, file_type):
+    try:
+        logger.info(f"Checking if {file_type.upper()} file is empty: {file_path}")
+
+        if file_type == "excel":
+            df = spark.read.format("com.crealytics.spark.excel") \
+                .option("header", "true") \
+                .load(file_path)
+            if df.head(1):
+                logger.info(f"Excel file {file_path} is not empty.")
+                return False
+            else:
+                logger.warning(f"Excel file {file_path} is empty.")
+
+        elif file_type == "csv":
+            df = spark.read.format("csv") \
+                .option("header", "true") \
+                .load(file_path)
+            if df.head(1):
+                logger.info(f"CSV file {file_path} is not empty.")
+                return False
+            else:
+                logger.warning(f"CSV file {file_path} is empty.")
+
+        elif file_type == "json":
+            df = spark.read.format("json") \
+                .option("multiline", "true") \
+                .load(file_path)
+            if df.head(1):
+                logger.info(f"JSON file {file_path} is not empty.")
+                return False
+            else:
+                logger.warning(f"JSON file {file_path} is empty.")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error checking file {file_path}: {e}")
+        return True
 
 def get_sheet_names(file_path):
     try:
@@ -27,6 +67,10 @@ def load_files(spark, folder_path):
         try:
             # Handling Excel files
             if filename.endswith(".xlsx") or filename.endswith(".xls"):
+                if is_file_empty(spark, file_path, "excel"):
+                    logger.warning(f"Excel file is empty: {file_path}")
+                    continue
+
                 sheet_names = get_sheet_names(file_path)
                 
                 if not sheet_names:
@@ -50,6 +94,10 @@ def load_files(spark, folder_path):
 
             # Handling CSV files
             elif filename.endswith(".csv"):
+                if is_file_empty(spark, file_path, "csv"):
+                    logger.warning(f"CSV file is empty: {file_path}")
+                    continue
+
                 try:
                     df = spark.read.format("csv") \
                         .option("header", "true") \
@@ -65,6 +113,10 @@ def load_files(spark, folder_path):
 
             # Handling JSON files
             elif filename.endswith(".json"):
+                if is_file_empty(spark, file_path, "json"):
+                    logger.warning(f"JSON file is empty: {file_path}")
+                    continue
+
                 try:
                     df_json = spark.read.format("json") \
                         .option("multiline", "true") \
