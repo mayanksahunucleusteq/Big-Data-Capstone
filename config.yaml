@@ -1,173 +1,184 @@
-df1:
-  remove_duplicates: {}
-  remove_decimal:
-    columns:
-      - customer_id
-      - zip_code
-  handle_negative_values:
-    columns:
-      - zip_code
-    operation: 'absolute'
-  validate_emails:
-    column: 'email'
-    invalid_message: 'Invalid Email'
-  clean_phone_numbers:
-    column: 'phone_number'
-  standardize_date_format:
-    column: 'birth_date'
-  impute_nulls:
-    columns:
-      - first_name
-      - last_name
-      - city
-      - state
-      - zip_code
-    method: 'constant'
-    value: 'Not Available'
-  drop_nulls:
-    columns:
-      - customer_id
-    archive_folder: '/spark-data/Archive'
-    archive_df_name: 'customer'
-  convert_column_type:
-    - column: 'customer_id'
-      target_type: 'long'
-    - column: 'zip_code'
-      target_type: 'string'
-    - column: 'birth_date'
-      target_type: 'date'
+cleaning:
+  df1:
+    remove_duplicates: {}
+    remove_decimal:
+      columns:
+        - customer_id
+        - zip_code
+    handle_negative_values:
+      columns:
+        - zip_code
+      operation: 'absolute'
+    validate_emails:
+      column: 'email'
+      invalid_message: 'Invalid Email'
+    clean_phone_numbers:
+      column: 'phone_number'
+    standardize_date_format:
+      column: 'birth_date'
+    impute_nulls:
+      columns:
+        - first_name
+        - last_name
+        - city
+        - state
+        - zip_code
+      method: 'constant'
+      value: 'Not Available'
+    drop_nulls:
+      columns:
+        - customer_id
+      archive_folder: '/spark-data/Archive'
+      archive_df_name: 'customer'
+    convert_column_type:
+      - column: 'customer_id'
+        target_type: 'long'
+      - column: 'zip_code'
+        target_type: 'string'
+      - column: 'birth_date'
+        target_type: 'date'
 
-df2:
-  remove_duplicates: {}
-  remove_decimal:
-    columns:
-      - order_id
-      - customer_id
-      - total_amount
-  handle_negative_values:
-    columns:
-      - total_amount
-    operation: 'absolute'
-  impute_nulls:
-    columns:
-      - total_amount
-      - shipping_address
-      - billing_address
-      - customer_id
-    method: 'constant'
-    value: 'Not Available'
-  drop_nulls:
-    columns: 
-      - order_id
-    archive_folder: '/spark-data/Archive'
-    archive_df_name: 'order'
-  standardize_date_format:
-    column: 'order_date'
-  remove_string_from_columns:
-    columns:
-      - shipping_address
-      - billing_address
-    string_to_remove: '\n'
-  convert_column_type:
-    - column: 'order_id'
-      target_type: 'long'
-    - column: 'customer_id'
-      target_type: 'bigint'
-    - column: 'order_date'
-      target_type: 'date'
+  df2:
+    remove_duplicates: {}
+    remove_decimal:
+      columns:
+        - order_id
+        - customer_id
+        - total_amount
+    handle_negative_values:
+      columns:
+        - total_amount
+      operation: 'absolute'
+    impute_nulls:
+      columns:
+        - total_amount
+        - shipping_address
+        - billing_address
+        - customer_id
+      method: 'constant'
+      value: 'Not Available'
+    drop_nulls:
+      columns: 
+        - order_id
+      archive_folder: '/spark-data/Archive'
+      archive_df_name: 'order'
+    standardize_date_format:
+      column: 'order_date'
+    remove_string_from_columns:
+      columns:
+        - shipping_address
+        - billing_address
+      string_to_remove: '\n'
+    convert_column_type:
+      - column: 'order_id'
+        target_type: 'long'
+      - column: 'customer_id'
+        target_type: 'bigint'
+      - column: 'order_date'
+        target_type: 'date'
 
-df3:
-  remove_duplicates: {}
-  remove_decimal:
-    columns:
-      - product_id
-      - inventory
-  handle_negative_values:
-    columns:
-      - product_id
-      - inventory
-      - price
-    operation: 'absolute'
-  impute_nulls:
-    columns:
-      - product_name
-      - category
-      - description
-    method: 'constant'
-    value: 'Not Available'
-  drop_nulls:
-    columns: 
-      - product_id
-    archive_folder: '/spark-data/Archive'
-    archive_df_name: 'product'
-  remove_string_from_columns:
-    columns:
-      - description
-    string_to_remove: '\n'
-  convert_column_type:
-    - column: 'product_id'
-      target_type: 'bigint'
-    - column: 'inventory'
-      target_type: 'int'
+  df3:
+    remove_duplicates: {}
+    remove_decimal:
+      columns:
+        - product_id
+        - inventory
+    handle_negative_values:
+      columns:
+        - product_id
+        - inventory
+        - price
+      operation: 'absolute'
+    impute_nulls:
+      columns:
+        - product_name
+        - category
+        - description
+      method: 'constant'
+      value: 'Not Available'
+    drop_nulls:
+      columns: 
+        - product_id
+      archive_folder: '/spark-data/Archive'
+      archive_df_name: 'product'
+    remove_string_from_columns:
+      columns:
+        - description
+      string_to_remove: '\n'
+    convert_column_type:
+      - column: 'product_id'
+        target_type: 'bigint'
+      - column: 'inventory'
+        target_type: 'int'
 
-df4:
-  remove_duplicates: {}
-  handle_negative_values:
-    columns:
-      - quantity
-      - product_id
-      - price
-      - order_item_id
-      - order_id
-    operation: 'absolute'
-  impute_nulls:
-    columns:
-      - quantity
-      - product_id
-      - order_id
-    method: 'constant'
-    value: 'Not Available'
-  drop_nulls:
-    columns: 
-      - order_item_id
-    archive_folder: '/spark-data/Archive'
-    archive_df_name: 'order_item'
-  convert_column_type:
-    - column: 'price'
-      target_type: 'int'
-    - column: 'quantity'
-      target_type: 'int'
+  df4:
+    remove_duplicates: {}
+    handle_negative_values:
+      columns:
+        - quantity
+        - product_id
+        - price
+        - order_item_id
+        - order_id
+      operation: 'absolute'
+    impute_nulls:
+      columns:
+        - quantity
+        - product_id
+        - order_id
+      method: 'constant'
+      value: 'Not Available'
+    drop_nulls:
+      columns: 
+        - order_item_id
+      archive_folder: '/spark-data/Archive'
+      archive_df_name: 'order_item'
+    convert_column_type:
+      - column: 'price'
+        target_type: 'int'
+      - column: 'quantity'
+        target_type: 'int'
 
-df5:
-  remove_duplicates: {}
-  handle_negative_values:
-    columns:
-      - product_id
-      - customer_id
-      - rating
-      - review_id
-    operation: 'absolute'
-  impute_nulls:
-    columns:
-      - customer_id
-      - product_id
-      - review_date
-      - review_text
-    method: 'constant'
-    value: 'Not Available'
-  drop_nulls:
-    columns: 
-      - review_id
-    archive_folder: '/spark-data/Archive'
-    archive_df_name: 'review'
-  remove_string_from_columns:
-    columns:
-      - review_text
-    string_to_remove: '\n'
-  standardize_date_format:
-    column: 'review_date'
-  convert_column_type:
-    - column: 'rating'
-      target_type: 'int'
-    - column: 'review_date'
-      target_type: 'date'
+  df5:
+    remove_duplicates: {}
+    handle_negative_values:
+      columns:
+        - product_id
+        - customer_id
+        - rating
+        - review_id
+      operation: 'absolute'
+    impute_nulls:
+      columns:
+        - customer_id
+        - product_id
+        - review_date
+        - review_text
+      method: 'constant'
+      value: 'Not Available'
+    drop_nulls:
+      columns: 
+        - review_id
+      archive_folder: '/spark-data/Archive'
+      archive_df_name: 'review'
+    remove_string_from_columns:
+      columns:
+        - review_text
+      string_to_remove: '\n'
+    standardize_date_format:
+      column: 'review_date'
+    convert_column_type:
+      - column: 'rating'
+        target_type: 'int'
+      - column: 'review_date'
+        target_type: 'date'
+
+
+transformations:
+  customer:
+    add_age_column:
+      birth_date_column: 'birth_date'
+  order:
+    add_state_columns:
+      shipping_col: 'shipping_address'
+      billing_col: 'billing_address'
