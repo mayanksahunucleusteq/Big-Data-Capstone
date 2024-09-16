@@ -7,7 +7,7 @@ from utils.logging_setup import setup_logging
 from typing import Callable, Dict
 from typing import Any
 from fpdf import FPDF
-
+from pyspark.sql import functions
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/data_cleaning.log")
@@ -444,30 +444,35 @@ def validate_emails(df: DataFrame, column: str, invalid_message: str) -> DataFra
     return df
 
 #Null counts
-def count_nulls_in_column(df: DataFrame, column: str) -> int:
+def calculate_total_null_count(df: DataFrame) -> int:
     """
-    Counts the number of null values and string 'null' in a specified column of the DataFrame.
+    Calculate the total number of null values (None, 'null', or literal null) in a PySpark DataFrame.
 
     Parameters:
-    df (DataFrame): The input DataFrame.
-    column_name (str): The name of the column to count nulls in.
+    df (DataFrame): PySpark DataFrame
 
     Returns:
-    int: The count of null values and string 'null' in the column.
+    int: Total count of null-like values across all columns
     """
     try:
-        # Count null values and string 'null'
-        null_count = df.filter(
-            (col(column).isNull()) | (col(column) == lit('null'))
-        ).count()
-
-        logger.info(f"Count of null values and 'null' strings in column '{column}': {null_count}")
-
+        # Log the start of the null count calculation
+        logger.info("Starting total null count calculation for all columns.")
+        
+        total_null_count = 0
+        
+        # Iterate through all columns to calculate total null counts
+        for col in df.columns:
+            null_count = df.filter((functions.col(col).isNull()) | (functions.col(col) == 'null')).count()
+            total_null_count += null_count
+        
+        # Log the result
+        logger.info(f"Total null count: {total_null_count}")
+        
+        return total_null_count
+    
     except Exception as e:
-        logger.error(f"Error counting null values in column '{column}': {e}")
-        raise
-
-    return null_count
+        logger.error(f"Error occurred while calculating null counts: {e}", exc_info=True)
+        return -1
 
 #Type Conversion If needed
 def convert_column_type(df: DataFrame, column: str, target_type: str) -> DataFrame:
@@ -604,6 +609,9 @@ def get_dataframe_summary(df: DataFrame) -> dict:
     # Duplicate counts
     duplicate_count = df.count() - df.dropDuplicates().count()
 
+    #null counts
+    null_counts = calculate_total_null_count(df)
+
     # Data types
     column_data_types = {field.name: str(field.dataType) for field in df.schema.fields}
 
@@ -611,6 +619,7 @@ def get_dataframe_summary(df: DataFrame) -> dict:
         "row_count": row_count,
         "column_count": column_count,
         "duplicate_count": duplicate_count,
+        "null_counts": null_counts,
         "data_types": column_data_types
     }
 
@@ -642,7 +651,7 @@ def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
 
         def add_table(self, table_data):
             self.set_font('Arial', 'B', 12)
-            col_widths = [40, 20, 20, 20, 20, 20, 20, 25, 25]
+            col_widths = [40, 40, 40, 40, 40]
             
             for i, header in enumerate(table_data[0]):
                 self.cell(col_widths[i], 10, header, 1, 0, 'C')
@@ -660,12 +669,12 @@ def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
     
     # Table Headers for before cleaning
     table_data_before = [
-        ["DataFrame", "Rows Before", "Columns Before", "Duplicates Before"]
+        ["DataFrame", "Rows Before", "Columns Before", "Duplicates Before", "Null Before"]
     ]
     
     # Table Headers for after cleaning
     table_data_after = [
-        ["DataFrame", "Rows After", "Columns After", "Duplicates After"]
+        ["DataFrame", "Rows After", "Columns After", "Duplicates After", "Null After"]
     ]
     
     for df_name, (before_cleaning, after_cleaning) in all_summaries.items():
@@ -673,12 +682,17 @@ def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
         duplicates_before = before_cleaning.get('duplicate_count', 0)
         duplicates_after = after_cleaning.get('duplicate_count', 0)
 
+        # Retrieve null counts before and after cleaning
+        null_counts_before = before_cleaning.get('null_counts', 0)
+        null_counts_after = after_cleaning.get('null_counts', 0)
+
         # Prepare row data for each DataFrame before cleaning
         row_before = [
             df_name,
             before_cleaning['row_count'],
             before_cleaning['column_count'],
-            duplicates_before
+            duplicates_before,
+            null_counts_before
         ]
         table_data_before.append(row_before)
 
@@ -687,7 +701,8 @@ def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
             df_name,
             after_cleaning['row_count'],
             after_cleaning['column_count'],
-            duplicates_after
+            duplicates_after,
+            null_counts_after
         ]
         table_data_after.append(row_after)
 
