@@ -39,20 +39,13 @@ def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
             logger.error(f"The specified birth date column '{birth_date_column}' does not exist in the DataFrame.")
             raise ValueError(f"The specified birth date column '{birth_date_column}' does not exist in the DataFrame.")
         
-        logger.info(f"Column '{birth_date_column}' found. Calculating age and also ensure that birth date column is date type if it is a string type then convert this into date type")
+        logger.info(f"Column '{birth_date_column}' found. Calculating age, handling 'Invalid Date' if present.")
 
-        # Check if the birth_date_column is of string type and convert it to date type if necessary
-        if isinstance(df.schema[birth_date_column].dataType, StringType):
-            df = df.withColumn(
-                birth_date_column,
-                to_date(col(birth_date_column), "yyyy-MM-dd")  # Adjust the format as needed
-            )
-            logger.info(f"Column '{birth_date_column}' converted to date format.")
-
-        # Calculate age
+        # Calculate age, setting age to 0 if birth date is 'Invalid Date' or null
         df = df.withColumn(
             "age",
-            floor(datediff(current_date(), col(birth_date_column)) / 365.25)
+            when(col(birth_date_column) == "Invalid Date", 0)  # If birth date is 'Invalid Date', set age to 0
+            .otherwise(floor(datediff(current_date(), col(birth_date_column)) / 365.25))
         )
 
         logger.info("Age column added successfully.")
@@ -61,7 +54,7 @@ def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
     except Exception as e:
         logger.error(f"Error adding age column: {e}")
         raise
-    
+
 #Add states columns to Orders Table    
 def add_state_columns(df: DataFrame, shipping_col: str, billing_col: str) -> DataFrame:
     """

@@ -43,7 +43,17 @@ def load_all_tables(spark, jdbc_url, properties):
     :param properties: JDBC properties (user, password, driver)
     :return: Dictionary of DataFrames with table names as keys
     """
+    conn = None
     try:
+        # Connect to PostgreSQL
+        conn = psycopg2.connect(
+            host=jdbc_url.split("//")[1].split(":")[0],  # Extract host from jdbc_url
+            database=jdbc_url.split("/")[-1],  # Extract database name
+            user=properties["user"],
+            password=properties["password"]
+        )
+        cursor = conn.cursor()
+
         logger.info("Fetching table names from PostgreSQL.")
         tables_query = "(SELECT table_name FROM information_schema.tables WHERE table_schema='public') as table_list"
         tables_df = spark.read.jdbc(url=jdbc_url, table=tables_query, properties=properties)
@@ -62,6 +72,13 @@ def load_all_tables(spark, jdbc_url, properties):
         logger.error(f"Error loading tables from PostgreSQL: {e}")
         raise
 
+    finally:
+        # Ensure the connection is closed after the operation
+        if conn is not None:
+            cursor.close()
+            conn.close()
+            logger.info("PostgreSQL connection closed.")
+            
 #Save all dataframes in db
 def save_dfs_to_postgres_upsert(jdbc_url, properties, unique_key_columns: Dict[str, List[str]], **dataframes):
     """
