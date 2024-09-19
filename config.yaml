@@ -134,11 +134,6 @@ cleaning:
         - order_item_id
       archive_folder: '/spark-data/Archive'
       archive_df_name: 'order_item'
-    convert_column_type:
-      - column: 'price'
-        target_type: 'int'
-      - column: 'quantity'
-        target_type: 'int'
 
   review:
     remove_duplicates: {}
@@ -169,8 +164,6 @@ cleaning:
     standardize_date_format:
       column: 'review_date'
     convert_column_type:
-      - column: 'rating'
-        target_type: 'int'
       - column: 'review_date'
         target_type: 'date'
 
