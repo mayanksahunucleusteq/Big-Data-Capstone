@@ -3,6 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+demosfolder
+Data_Files
+logs
+Cleaned_Csv_File
+Archive
+
+
+
 # C extensions
 *.so
 

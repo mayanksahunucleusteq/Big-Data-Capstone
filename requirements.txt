@@ -1,0 +1,6 @@
+pyspark
+fpdf
+openpyxl
+psycopg2-binary
+matplotlib
+pyyaml
