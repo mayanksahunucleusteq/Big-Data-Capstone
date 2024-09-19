@@ -5,7 +5,7 @@ from pyspark.sql.window import Window
 from pyspark.sql.functions import col, sum as _sum, when, rank, round, expr, count, year, avg, floor, concat_ws
 
 # Call logging at the start of your script
-logger = setup_logging("/spark-data/logs/data_visualization.log")
+logger = setup_logging("/spark-data/logs/logger.log")
 
 #Checking if columns exist in dataframe or not
 def check_columns(df, expected_columns):

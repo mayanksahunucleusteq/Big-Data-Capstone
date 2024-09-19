@@ -1,6 +1,6 @@
 #Cleaning Confiquration
 cleaning:
-  df1:
+  customer:
     remove_duplicates: {}
     remove_decimal:
       columns:
@@ -39,7 +39,7 @@ cleaning:
       - column: 'birth_date'
         target_type: 'date'
 
-  df2:
+  order:
     remove_duplicates: {}
     remove_decimal:
       columns:
@@ -78,7 +78,7 @@ cleaning:
       - column: 'order_date'
         target_type: 'date'
 
-  df3:
+  product:
     remove_duplicates: {}
     remove_decimal:
       columns:
@@ -112,7 +112,7 @@ cleaning:
       - column: 'inventory'
         target_type: 'int'
 
-  df4:
+  order_item:
     remove_duplicates: {}
     handle_negative_values:
       columns:
@@ -140,7 +140,7 @@ cleaning:
       - column: 'quantity'
         target_type: 'int'
 
-  df5:
+  review:
     remove_duplicates: {}
     handle_negative_values:
       columns:

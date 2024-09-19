@@ -8,7 +8,7 @@ from typing import Dict, List
 from utils.logging_setup import setup_logging
 
 # Call logger at the start of your script
-logger = setup_logging("/spark-data/logs/postgres_setup.log")
+logger = setup_logging("/spark-data/logs/logger.log")
 
 # Map PySpark data types to PostgreSQL data types
 def map_spark_to_postgres_type(spark_type):

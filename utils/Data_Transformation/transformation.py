@@ -6,7 +6,7 @@ from typing import Callable, Dict, Any
 
 
 # Call logging at the start of your script
-logger = setup_logging("/spark-data/logs/data_transformation.log")
+logger = setup_logging("/spark-data/logs/logger.log")
 
 # List of US state abbreviations
 US_STATE_ABBREVIATIONS = {

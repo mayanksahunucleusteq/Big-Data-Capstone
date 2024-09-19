@@ -6,7 +6,7 @@ from utils.logging_setup import setup_logging
 
 
 # Call logging at the start of your script
-logger = setup_logging("/spark-data/logs/data_ingestion.log")
+logger = setup_logging("/spark-data/logs/logger.log")
 
 # Function to check if the file is empty
 def is_file_empty(spark, file_path, file_type):

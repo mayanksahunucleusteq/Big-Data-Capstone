@@ -6,11 +6,11 @@ from pyspark.sql.functions import *
 from utils.logging_setup import setup_logging
 from typing import Callable, Dict
 from typing import Any
-from fpdf import FPDF
 from pyspark.sql import functions
+from utils.report import *
 
 # Call logging at the start of your script
-logger = setup_logging("/spark-data/logs/data_cleaning.log")
+logger = setup_logging("/spark-data/logs/logger.log")
 report_folder = "/spark-data/Report"
 logger.setLevel(logging.INFO)
 
@@ -530,7 +530,8 @@ def apply_cleaning_step(df: DataFrame, step_func: Callable, **kwargs) -> DataFra
         logger.error(f"Error while applying {step_func.__name__}: {str(e)}")
         raise
 
-def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, DataFrame]:
+
+def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str, Dict[str, Dict[str, Any]]], spark) -> Dict[str, DataFrame]:
     """
     Applies a data cleaning pipeline to multiple DataFrames based on configuration and generates combined reports.
 
@@ -542,13 +543,13 @@ def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str,
     Dict[str, DataFrame]: A dictionary of cleaned DataFrames.
     """
     cleaned_dfs = {}
-    all_summaries = {}  # Dictionary to store before and after summaries for all DataFrames
+    # Store initial state of DataFrames for comparison
+    before_cleaning_dfs = analyze_dataframes(dfs, spark)
 
     for df_name, df in dfs.items():
         logger.info(f"Starting cleaning process for {df_name}")
         
-        # Get summary before cleaning
-        before_cleaning_summary = get_dataframe_summary(df)
+
 
         if df_name in cleaning_config:
             steps = cleaning_config[df_name]
@@ -571,150 +572,18 @@ def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str,
                     raise
         else:
             logger.info(f"No cleaning steps configured for {df_name}, skipping.")
-        
-        # Get summary after cleaning
-        after_cleaning_summary = get_dataframe_summary(df)
-
-        # Store summaries for this DataFrame
-        all_summaries[df_name] = (before_cleaning_summary, after_cleaning_summary)
+    
 
         cleaned_dfs[df_name] = df
         logger.info(f"Completed cleaning process for {df_name}")
 
-    # Generate separate reports for before and after cleaning
-    before_and_after_report_path = f"{report_folder}/combined_cleaning_report.pdf"
-    generate_combined_cleaning_report(all_summaries, before_and_after_report_path)
-    logger.info(f"Data cleaning reports saved to {before_and_after_report_path}")
+        # Store final state of DataFrames for comparison
+    after_cleaning_dfs = analyze_dataframes(cleaned_dfs, spark)
+    # Compare the before and after states and generate the report
+    compare_dataframes_and_generate_report(before_cleaning_dfs, after_cleaning_dfs, "/spark-data/Report/data_cleaning_report.pdf")
+
 
     return cleaned_dfs
 
-#Report generation code:
-def get_dataframe_summary(df: DataFrame) -> dict:
-    """
-    Calculate various summary metrics for the DataFrame.
 
-    Metrics:
-    - Row and column counts
-    - Null counts
-    - Duplicate counts
-    - Data types
-
-    Returns:
-    dict: Summary metrics
-    """
-    # Total rows and columns
-    row_count = df.count()
-    column_count = len(df.columns)
-
-    # Duplicate counts
-    duplicate_count = df.count() - df.dropDuplicates().count()
-
-    #null counts
-    null_counts = calculate_total_null_count(df)
-
-    # Data types
-    column_data_types = {field.name: str(field.dataType) for field in df.schema.fields}
-
-    summary = {
-        "row_count": row_count,
-        "column_count": column_count,
-        "duplicate_count": duplicate_count,
-        "null_counts": null_counts,
-        "data_types": column_data_types
-    }
-
-    return summary
-
-def generate_combined_cleaning_report(all_summaries: dict, output_path: str):
-    """
-    Generate a PDF report summarizing the cleaning process for multiple DataFrames, 
-    including metrics before and after cleaning.
-
-    Parameters:
-    all_summaries (dict): A dictionary where keys are DataFrame names, and values are tuples (before_cleaning, after_cleaning)
-    output_path (str): Path to save the combined PDF report
-    """
-    class PDF(FPDF):
-        def header(self):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, 'Data Cleaning Report', 0, 1, 'C')
-
-        def chapter_title(self, title):
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, title, 0, 1, 'L')
-            self.ln(5)
-
-        def chapter_body(self, body):
-            self.set_font('Arial', '', 12)
-            self.multi_cell(0, 10, body)
-            self.ln()
-
-        def add_table(self, table_data):
-            self.set_font('Arial', 'B', 12)
-            col_widths = [40, 40, 40, 40, 40]
-            
-            for i, header in enumerate(table_data[0]):
-                self.cell(col_widths[i], 10, header, 1, 0, 'C')
-            self.ln()
-            
-            self.set_font('Arial', '', 12)
-            for row in table_data[1:]:
-                for i, item in enumerate(row):
-                    self.cell(col_widths[i], 10, str(item), 1, 0, 'C')
-                self.ln()
-
-    # Create instance of FPDF class
-    pdf = PDF()
-    pdf.add_page()
-    
-    # Table Headers for before cleaning
-    table_data_before = [
-        ["DataFrame", "Rows Before", "Columns Before", "Duplicates Before", "Null Before"]
-    ]
-    
-    # Table Headers for after cleaning
-    table_data_after = [
-        ["DataFrame", "Rows After", "Columns After", "Duplicates After", "Null After"]
-    ]
-    
-    for df_name, (before_cleaning, after_cleaning) in all_summaries.items():
-        # Safely handle duplicate counts
-        duplicates_before = before_cleaning.get('duplicate_count', 0)
-        duplicates_after = after_cleaning.get('duplicate_count', 0)
-
-        # Retrieve null counts before and after cleaning
-        null_counts_before = before_cleaning.get('null_counts', 0)
-        null_counts_after = after_cleaning.get('null_counts', 0)
-
-        # Prepare row data for each DataFrame before cleaning
-        row_before = [
-            df_name,
-            before_cleaning['row_count'],
-            before_cleaning['column_count'],
-            duplicates_before,
-            null_counts_before
-        ]
-        table_data_before.append(row_before)
-
-        # Prepare row data for each DataFrame after cleaning
-        row_after = [
-            df_name,
-            after_cleaning['row_count'],
-            after_cleaning['column_count'],
-            duplicates_after,
-            null_counts_after
-        ]
-        table_data_after.append(row_after)
-
-    # Add tables to PDF
-    pdf.chapter_title('Summary Before Cleaning')
-    pdf.add_table(table_data_before)
-
-    pdf.add_page()  # Add a new page for the second section
-
-    pdf.chapter_title('Summary After Cleaning')
-    pdf.add_table(table_data_after)
-    
-    # Save the combined PDF
-    pdf.output(output_path)
 
