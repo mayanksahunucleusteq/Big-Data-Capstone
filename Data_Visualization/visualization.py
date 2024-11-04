@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, functions
 from utils.logging_setup import setup_logging
 from pyspark.sql.window import Window
+import numpy as np
 from pyspark.sql.functions import col, sum as _sum, when, rank, round, expr, count, year, avg, floor, concat_ws
 
 # Call logging at the start of your script
@@ -242,13 +243,18 @@ def get_top_revenue_generating_products(df_order_items: DataFrame, df_product: D
         product_names = [row["product_name"] for row in top_revenue_products]
         revenues = [row['total_revenue'] for row in top_revenue_products]
 
+                # Function to display revenue and percentage on the pie chart
+        def format_label(pct, all_values):
+            absolute = int(np.round(pct/100.*np.sum(all_values)))
+            return f"${absolute:,}\n({pct:.1f}%)"
+
         logger.info("Plotting the top revenue-generating products.")
         # Step 6: Plot the top N highest revenue-generating products
-        plt.figure(figsize=(12, 8))
-        plt.barh(product_names, revenues, color='seagreen')
+        plt.figure(figsize=(10, 7))
+        plt.pie(revenues, labels=product_names, autopct=lambda pct: format_label(pct, revenues), 
+                startangle=140, colors=plt.cm.Paired.colors)
         plt.title(f"Top {top_n} Highest Revenue Generating Products")
-        plt.xlabel("Total Revenue")
-        plt.ylabel("Product Name")
+        plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
         plt.tight_layout()
         plt.show()
 
@@ -602,7 +608,6 @@ def plot_top_n_average_revenue(df: DataFrame, category_col: str, revenue_col: st
         logger.error(f"An error occurred while plotting: {e}")
         raise
 
-
 #Revenue Product wise
 def get_total_revenue_by_product(df_order_items: DataFrame, df_products: DataFrame, 
                                  product_id_col: str, quantity_col: str, price_col: str, 
@@ -658,7 +663,6 @@ def get_total_revenue_by_product(df_order_items: DataFrame, df_products: DataFra
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         raise
-
 
 #Inventory Status
 def get_inventory_status(df_order_items: DataFrame, df_products: DataFrame, 
@@ -891,12 +895,7 @@ def calculate_customer_lifetime_value(df_order_items: DataFrame, df_orders: Data
         raise
 
 # Plot top n premium customer based on clv
-def plot_top_n_premium_customers(
-    df_customer_clv: DataFrame, 
-    customer_name_col: str, 
-    clv_col: str, 
-    top_n: int = 10
-) -> None:
+def plot_top_n_premium_customers(df_customer_clv: DataFrame, customer_name_col: str, clv_col: str, top_n: int = 10) -> None:
     """
     Plots the top N premium customers based on Customer Lifetime Value (CLV).
 
@@ -959,17 +958,7 @@ def plot_top_n_premium_customers(
         raise
 
 #Yearly Revenue
-def calculate_yearly_revenue(
-    df_orders: DataFrame, 
-    df_order_items: DataFrame, 
-    order_id_col: str, 
-    order_date_col: str, 
-    price_col: str, 
-    quantity_col: str, 
-    revenue_col: str = 'revenue', 
-    year_col: str = 'year', 
-    total_revenue_col: str = 'total_revenue'
-) -> DataFrame:
+def calculate_yearly_revenue(df_orders: DataFrame, df_order_items: DataFrame, order_id_col: str, order_date_col: str, price_col: str, quantity_col: str, revenue_col: str = 'revenue', year_col: str = 'year', total_revenue_col: str = 'total_revenue') -> DataFrame:
     """
     Calculates the total revenue for each year.
 
@@ -1021,11 +1010,7 @@ def calculate_yearly_revenue(
         raise
 
 #plot for yearly revenue
-def plot_yearly_revenue(
-    df_yearly_revenue: DataFrame, 
-    year_col: str, 
-    total_revenue_col: str
-) -> None:
+def plot_yearly_revenue(df_yearly_revenue: DataFrame, year_col: str, total_revenue_col: str) -> None:
     """
     Plots the total revenue for each year.
 
@@ -1075,14 +1060,7 @@ def plot_yearly_revenue(
         raise
 
 #Max Orders Per Year
-def get_max_orders_per_year(
-    df_orders: DataFrame, 
-    order_date_col: str, 
-    order_id_col: str, 
-    year_col: str = "year", 
-    num_orders_col: str = "num_orders", 
-    max_orders_col: str = "max_orders"
-) -> DataFrame:
+def get_max_orders_per_year(df_orders: DataFrame, order_date_col: str, order_id_col: str, year_col: str = "year", num_orders_col: str = "num_orders", max_orders_col: str = "max_orders") -> DataFrame:
     """
     Calculates the maximum number of orders for each year.
 
@@ -1125,11 +1103,7 @@ def get_max_orders_per_year(
         raise
 
 #Plot Max Orders
-def plot_max_orders_per_year(
-    df_max_orders: DataFrame, 
-    year_col: str, 
-    max_orders_col: str
-) -> None:
+def plot_max_orders_per_year(df_max_orders: DataFrame, year_col: str, max_orders_col: str) -> None:
     """
     Plots the maximum number of orders per year.
 
@@ -1181,14 +1155,7 @@ def plot_max_orders_per_year(
         raise
 
 #Average Ratings per products
-def categorize_reviews(
-    df_reviews: DataFrame, 
-    df_products: DataFrame, 
-    review_id_col: str, 
-    rating_col: str, 
-    product_id_col: str, 
-    product_name_col: str
-) -> DataFrame:
+def categorize_reviews(df_reviews: DataFrame, df_products: DataFrame, rating_col: str, product_id_col: str, product_name_col: str) -> DataFrame:
     """
     Categorizes products based on their average review ratings and includes product names.
 
@@ -1213,7 +1180,8 @@ def categorize_reviews(
                                                   .select(product_id_col, product_name_col, "average_rating")
 
         # Categorize products based on their average rating
-        categorize_expr = when(col("average_rating") == 1, 'poor') \
+        categorize_expr = when(col("average_rating") == 0, 'very poor') \
+            .when(col("average_rating") == 1, 'poor') \
             .when(col("average_rating") == 2, 'average') \
             .when(col("average_rating") == 3, 'satisfactory') \
             .when(col("average_rating") == 4, 'highly-satisfied') \
@@ -1293,3 +1261,186 @@ def plot_top_n_product_ratings(df_categorize_reviews: DataFrame, product_id_col:
     except Exception as e:
         logger.error(f"An error occurred while plotting: {e}")
         raise
+
+#Plot Top N product trend Yearly 
+def plot_top_product_yearly_trends(df_orders, df_order_items, df_products, order_id_col, order_date_col, product_id_col, quantity_col, product_name_col, top_n=10):
+    try:
+        logger.info("Starting the process to plot yearly trends for top products.")
+        
+        # Extract year from order_date and create a new column 'year'
+        df_orders = df_orders.withColumn('year', functions.year(functions.col(order_date_col)))
+
+
+        # Join the three tables (orders, order_items, and products)
+
+        df_joined = df_order_items \
+            .join(df_orders, df_order_items[order_id_col] == df_orders[order_id_col], 'inner') \
+            .join(df_products, df_order_items[product_id_col] == df_products[product_id_col], 'inner')
+
+
+        # Group by year and product to get total quantity sold per product per year
+        df_grouped = df_joined.groupBy('year', product_name_col) \
+            .agg(functions.sum(quantity_col).alias('total_quantity_sold')) \
+            .orderBy('year')  # Ensure sorting by year
+
+
+        # Get the top N products based on total quantity sold over all years
+        top_products = df_grouped.groupBy(product_name_col) \
+            .agg(functions.sum('total_quantity_sold').alias('total_quantity_sold')) \
+            .orderBy(functions.col('total_quantity_sold').desc()) \
+            .limit(top_n)
+
+
+        # Filter the original grouped data to only include the top N products
+        df_filtered = df_grouped.join(top_products, product_name_col, 'inner').orderBy('year')
+
+        # Collect the data for plotting
+        logger.info("Collecting data for plotting.")
+        data_collected = df_filtered.collect()
+        logger.info(f"Data collection complete. {len(data_collected)} rows collected.")
+
+        # Prepare the data for plotting
+        logger.info("Preparing data for plotting.")
+        product_year_map = {}
+        for row in data_collected:
+            year = row['year']
+            product = row[product_name_col]
+            quantity = row['total_quantity_sold']
+            if product not in product_year_map:
+                product_year_map[product] = {}
+            product_year_map[product][year] = quantity
+
+        # Create a list of years and a dictionary of product quantities by year
+        years = sorted(list(set([row['year'] for row in data_collected])))
+        product_quantities = {product: [product_year_map[product].get(year, 0) for year in years]
+                              for product in product_year_map}
+        logger.info(f"Data prepared for plotting. Years range: {years}")
+
+        # Plotting
+        logger.info("Starting to plot the data.")
+        plt.figure(figsize=(10, 6))
+        for product, quantities in product_quantities.items():
+            plt.plot(years, quantities, marker='o', label=product)
+        
+        plt.xlabel('Year')
+        plt.ylabel('Total Quantity Sold')
+        plt.title(f'Yearly Sales Trend for Top {top_n} Products')
+        plt.legend(title='Products')
+        plt.grid(True)
+        plt.show()
+        logger.info("Plotting complete and displayed.")
+
+    except Exception as e:
+        logger.error(f"Error plotting yearly sales trend for top products: {e}")
+        raise e
+
+#Plot Top N product trend Monthly
+def plot_top_product_monthly_trends(spark,orders_df, order_items_df, products_df,  order_id_col, order_date_col, product_id_col, quantity_col, product_name_col, year, top_n=10):
+    """
+    Function to plot the monthly sales trend for the top N products in a specific year.
+
+    :param orders_df: DataFrame containing orders data.
+    :param order_items_df: DataFrame containing order items data.
+    :param products_df: DataFrame containing product data.
+    :param order_id_col: Name of the order_id column.
+    :param order_date_col: Name of the order date column.
+    :param product_id_col: Name of the product_id column.
+    :param quantity_col: Name of the quantity column.
+    :param product_name_col: Name of the product name column.
+    :param year: Year for which the monthly trend will be plotted.
+    :param top_n: Number of top products to display in the trend. Default is 10.
+    """
+    try:
+        spark.conf.set("spark.sql.codegen.wholeStage", "false")
+        # Filter orders by the specific year
+        orders_df_filtered = orders_df.filter(functions.year(functions.col(order_date_col)) == year)
+
+        # Join orders with order_items on order_id to get order details with product sales
+        order_sales_df = orders_df_filtered.join(order_items_df, on=order_id_col)
+
+        # Join products table to get product details
+        order_sales_df = order_sales_df.join(products_df, on=product_id_col)
+
+        # Extract month from order_date
+        order_sales_df = order_sales_df.withColumn("order_month", functions.month(functions.col(order_date_col)))
+
+        # Group by product_id and month to calculate total quantity sold
+        monthly_sales_df = order_sales_df.groupBy(product_id_col, product_name_col, "order_month") \
+            .agg(functions.sum(quantity_col).alias("total_quantity"))
+
+        logger.info(f"Finding top {top_n} products based on total quantity sold.")
+        # Sort to find the top N products based on overall quantity sold
+        top_products_df = monthly_sales_df.groupBy(product_id_col, product_name_col) \
+            .agg(functions.sum("total_quantity").alias("total_sales")) \
+            .orderBy(functions.col("total_sales").desc()).limit(top_n)
+        logger.info(f"Top {top_n} products determined.")
+
+        # Get the top product IDs
+        top_product_ids = [row[product_id_col] for row in top_products_df.collect()]
+
+        # Filter the monthly_sales_df for only the top N products
+        top_products_sales_df = monthly_sales_df.filter(functions.col(product_id_col).isin(top_product_ids))
+
+        all_months_products_df = top_products_sales_df.groupBy(product_id_col, product_name_col) \
+            .agg(functions.array([functions.lit(i) for i in range(1, 13)]).alias("all_months"))
+
+        # Explode and join to get all months for each product
+        exploded_months_df = all_months_products_df.withColumn("order_month", functions.explode("all_months"))
+
+        # Join back with the top_products_sales_df to fill missing months with zeroes
+        full_top_products_sales_df = exploded_months_df.join(top_products_sales_df, 
+                                                              on=[product_id_col, product_name_col, "order_month"], 
+                                                              how="left")
+
+        # Fill missing quantities with 0 for months with no sales
+        full_top_products_sales_df = full_top_products_sales_df.na.fill(0, subset=["total_quantity"])
+
+        logger.info("Collecting sales data for plotting.")
+        # Collect the data for plotting
+        top_products_sales_data = full_top_products_sales_df.collect()
+
+ 
+        # Organize the data by product and month for plotting
+        product_sales_dict = {}
+        for row in top_products_sales_data:
+            product_id = row[product_id_col]
+            product_name = row[product_name_col]
+            order_month = row["order_month"]
+            total_quantity = row["total_quantity"]
+
+            if product_id not in product_sales_dict:
+                product_sales_dict[product_id] = {
+                    "name": product_name,
+                    "monthly_sales": [0] * 12  # Initialize with 12 months of zeros
+                }
+
+            product_sales_dict[product_id]["monthly_sales"][order_month - 1] = total_quantity
+
+        logger.info("Plotting monthly sales trends.")
+        # Plot the sales trend for each product
+        plt.figure(figsize=(10, 6))
+
+        for product_id, product_data in product_sales_dict.items():
+            plt.plot(range(1, 13), product_data["monthly_sales"], marker='o', label=product_data["name"])
+
+        plt.title(f'Monthly Sales Trend for Top {top_n} Products in {year}')
+        plt.xlabel('Month')
+        plt.ylabel('Total Quantity Sold')
+        plt.xticks(ticks=range(1, 13), labels=[
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ])
+        plt.legend(title="Products", bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True)
+
+        # Ensure the y-axis only shows integer values
+        plt.gca().yaxis.get_major_locator().set_params(integer=True)
+
+        plt.tight_layout()
+        plt.show()
+
+        logger.info(f"Successfully plotted monthly sales trends for the top {top_n} products in {year}.")
+    
+    except Exception as e:
+        logger.error(f"Error plotting monthly product trends: {e}")
+        raise e

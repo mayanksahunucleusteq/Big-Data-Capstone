@@ -3,24 +3,15 @@ from pyspark.sql.functions import *
 from pyspark.sql.types import StringType
 from utils.logging_setup import setup_logging
 from typing import Callable, Dict, Any
+import json
 
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/logger.log")
 
 # List of US state abbreviations
-US_STATE_ABBREVIATIONS = {
-    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
-    'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
-    'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
-    'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
-    'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
-    'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
-    'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
-    'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
-}
+us_state_abbreviations = json.load(open('/spark-data/Files/us_state_abbreviations.json'))
+
 
 #Add Age column in Customer Table
 def add_age_column(df: DataFrame, birth_date_column: str) -> DataFrame:
@@ -83,7 +74,7 @@ def add_state_columns(df: DataFrame, shipping_col: str, billing_col: str) -> Dat
         df = df.withColumn(
             "shipping_state",
             when(
-                regexp_extract(col(shipping_col), r'\b([A-Z]{2})\b', 1).isin(*US_STATE_ABBREVIATIONS.keys()),
+                regexp_extract(col(shipping_col), r'\b([A-Z]{2})\b', 1).isin(*us_state_abbreviations.keys()),
                 regexp_extract(col(shipping_col), r'\b([A-Z]{2})\b', 1)
             ).otherwise("Not Available")
         )
@@ -92,7 +83,7 @@ def add_state_columns(df: DataFrame, shipping_col: str, billing_col: str) -> Dat
         df = df.withColumn(
             "billing_state",
             when(
-                regexp_extract(col(billing_col), r'\b([A-Z]{2})\b', 1).isin(*US_STATE_ABBREVIATIONS.keys()),
+                regexp_extract(col(billing_col), r'\b([A-Z]{2})\b', 1).isin(*us_state_abbreviations.keys()),
                 regexp_extract(col(billing_col), r'\b([A-Z]{2})\b', 1)
             ).otherwise("Not Available")
         )

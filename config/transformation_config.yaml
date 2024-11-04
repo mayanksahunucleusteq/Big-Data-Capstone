@@ -1,0 +1,16 @@
+dataframes:
+  customer: 
+  orders: 
+  product: 
+  order_item: 
+  review: 
+
+#Transformation Configuration
+transformations:
+  customer:
+    add_age_column:
+      birth_date_column: 'birth_date'
+  orders:
+    add_state_columns:
+      shipping_col: 'shipping_address'
+      billing_col: 'billing_address'

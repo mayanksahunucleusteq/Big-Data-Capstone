@@ -5,6 +5,57 @@ from utils.logging_setup import setup_logging
 logger = setup_logging("/spark-data/logs/logger.log")
 report_folder = "/spark-data/Report"
 
+def analyze_dataframes(dataframes: dict, spark):
+    """Function to analyze multiple DataFrames and return a consolidated report."""
+    
+    # List to store analysis results
+    analysis_results = []
+    
+    # Iterate through the dictionary of DataFrames
+    for df_name, df in dataframes.items():
+        try:
+            logger.info(f"Analyzing DataFrame: {df_name}")
+            
+            # Get row and column counts
+            row_count = df.count()
+            column_count = len(df.columns)
+            
+            # Calculate duplicate count
+            duplicate_count = df.count() - df.dropDuplicates().count()
+
+            # Iterate through each column of the DataFrame
+            for column in df.columns:
+                try:
+                    # Calculate null counts (handling actual null, NaN, and the string 'null')
+                    null_count = df.select(count(when(col(column).isNull() | (col(column) == 'null'), column))).collect()[0][0]
+                    
+                    # Calculate negative counts (only for numeric columns)
+                    negative_count = 0
+                    if df.schema[column].dataType.simpleString() in ('int', 'long', 'float', 'double'):
+                        negative_count = df.filter(col(column) < 0).count()
+                    
+                    # Get the correct data type of the column
+                    data_type = df.schema[column].dataType.simpleString()
+                    
+                    # Append the results as a tuple to the list
+                    analysis_results.append((df_name, column, null_count, negative_count, data_type, row_count, column_count, duplicate_count))
+                    
+                except Exception as e:
+                    logger.error(f"Error analyzing column {column} in DataFrame {df_name}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error analyzing DataFrame {df_name}: {e}")
+    
+    # Create a DataFrame from the results list
+    try:
+        schema = ['DataFrame Name', 'Column Name', 'Null Count', 'Negative Count', 'Data Type', 'Row Count', 'Column Count', 'Duplicate Count']
+        result_df = spark.createDataFrame(analysis_results, schema=schema)
+        logger.info("Analysis DataFrame created successfully.")
+    except Exception as e:
+        logger.error(f"Error creating analysis DataFrame: {e}")
+        raise
+    
+    return result_df
 
 def compare_dataframes_and_generate_report(before_df: DataFrame, after_df: DataFrame, report_path: str):
     """
@@ -26,6 +77,8 @@ def compare_dataframes_and_generate_report(before_df: DataFrame, after_df: DataF
         
         # Initialize PDF
         pdf = FPDF()
+        
+        # First Page: Data Cleaning Report
         pdf.add_page()
         pdf.set_font("Arial", size=12)
         
@@ -52,7 +105,6 @@ def compare_dataframes_and_generate_report(before_df: DataFrame, after_df: DataF
             after_row = after_dict.get(key, {})
 
             try:
-            
                 # Null counts
                 before_null_count = before_row['Null Count'] if 'Null Count' in before_row else 0
                 after_null_count = after_row['Null Count'] if 'Null Count' in after_row else 0
@@ -91,61 +143,47 @@ def compare_dataframes_and_generate_report(before_df: DataFrame, after_df: DataF
             except Exception as e:
                 logger.error(f"Error processing {df_name} - {column_name}: {e}")
 
-        # Save the PDF report
-        try:
-            pdf.output(report_path)
-            logger.info(f"Report successfully saved to {report_path}")
-        except Exception as e:
-            logger.error(f"Error saving report to {report_path}: {e}")
-            raise
-
-
-    except Exception as e:
-            logger.error(f"Error generating report: {e}")
-            raise
-
-def analyze_dataframes(dataframes: dict, spark):
-    """Function to analyze multiple DataFrames and return a consolidated report."""
-    
-    # List to store analysis results
-    analysis_results = []
-    
-    # Iterate through the dictionary of DataFrames
-    for df_name, df in dataframes.items():
-        try:
-            logger.info(f"Analyzing DataFrame: {df_name}")
+        # New Page: DataFrame Row and Column Counts
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Add title for the new page
+        pdf.cell(200, 10, txt="DataFrame Row and Column Counts", ln=True, align='C')
+        pdf.ln(10)
+        
+        # Add headers
+        pdf.cell(30, 10, 'DataFrame', 1)
+        pdf.cell(25, 10, 'Row Before', 1)
+        pdf.cell(25, 10, 'Row After', 1)
+        pdf.cell(25, 10, 'Column Bef', 1)
+        pdf.cell(25, 10, 'Column Af', 1)
+        pdf.cell(30, 10, 'Duplicate Bef', 1)
+        pdf.cell(25, 10, 'Duplicate Af', 1)
+        pdf.ln()
+        
+        # Collect unique DataFrame names
+        df_names = set(row['DataFrame Name'] for row in before_data)
+        
+        for df_name in df_names:
+            before_row_count = before_df.filter(col("DataFrame Name") == df_name).agg({"Row Count": "max"}).collect()[0][0]
+            after_row_count = after_df.filter(col("DataFrame Name") == df_name).agg({"Row Count": "max"}).collect()[0][0]
+            before_column_count = before_df.filter(col("DataFrame Name") == df_name).agg({"Column Count": "max"}).collect()[0][0]
+            after_column_count = after_df.filter(col("DataFrame Name") == df_name).agg({"Column Count": "max"}).collect()[0][0]
+            before_duplicate_count = before_df.filter(col("DataFrame Name") == df_name).agg({"Duplicate Count": "max"}).collect()[0][0]
+            after_duplicate_count = after_df.filter(col("DataFrame Name") == df_name).agg({"Duplicate Count": "max"}).collect()[0][0]
             
-            # Iterate through each column of the DataFrame
-            for column in df.columns:
-                try:
-                    # Calculate null counts (handling actual null, NaN, and the string 'null')
-                    null_count = df.select(count(when(col(column).isNull() | (col(column) == 'null'), column))).collect()[0][0]
-                    
-                    # Calculate negative counts (only for numeric columns)
-                    negative_count = 0
-                    if df.schema[column].dataType.simpleString() in ('int', 'long', 'float', 'double'):
-                        negative_count = df.filter(col(column) < 0).count()
-                    
-                    # Get the correct data type of the column
-                    data_type = df.schema[column].dataType.simpleString()
-                    
-                    # Append the results as a tuple to the list
-                    analysis_results.append((df_name, column, null_count, negative_count, data_type))
-                    
-                except Exception as e:
-                    logger.error(f"Error analyzing column {column} in DataFrame {df_name}: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Error analyzing DataFrame {df_name}: {e}")
-    
-    # Create a DataFrame from the results list
-    try:
-        schema = ['DataFrame Name', 'Column Name', 'Null Count', 'Negative Count', 'Data Type']
-        result_df = spark.createDataFrame(analysis_results, schema=schema)
-        logger.info("Analysis DataFrame created successfully.")
-    except Exception as e:
-        logger.error(f"Error creating analysis DataFrame: {e}")
-        raise
-    
-    return result_df
+            pdf.cell(30, 10, df_name, 1)
+            pdf.cell(25, 10, str(before_row_count), 1)
+            pdf.cell(25, 10, str(after_row_count), 1)
+            pdf.cell(25, 10, str(before_column_count), 1)
+            pdf.cell(25, 10, str(after_column_count), 1)
+            pdf.cell(30, 10, str(before_duplicate_count), 1)
+            pdf.cell(25, 10, str(after_duplicate_count), 1)
+            pdf.ln()
 
+        # Save the PDF report
+        pdf.output(report_path)
+        logger.info(f"Report generated successfully at {report_path}.")
+        
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")

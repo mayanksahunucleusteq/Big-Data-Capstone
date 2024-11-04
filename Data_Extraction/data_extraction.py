@@ -7,7 +7,7 @@ from utils.logging_setup import setup_logging
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/logger.log")
-
+     
 # Function to check if the file is empty
 def is_file_empty(spark, file_path, file_type):
     try:
@@ -139,6 +139,19 @@ def load_files(spark, folder_path):
                 except Exception as e:
                     logger.error(f"Error reading JSON file: {file_path} - {e}")
                     continue
+
+            elif filename.endswith(".parquet"):
+                if is_file_empty(spark, file_path,"parquet"):
+                    logger.warning(f"Parquet file is empty: {filename}")
+                else:
+                    try:
+                        df = spark.read.format("parquet").load(filename)
+                        df_name = f"df_{os.path.basename(filename).split('.')[0]}"
+                        dataframes[df_name] = df
+                        df.count() 
+                        logger.info(f"Successfully loaded Parquet file: {filename}")
+                    except Exception as e:
+                        logger.error(f"Error reading Parquet file: {filename} - {e}")
 
         except Exception as e:
             logger.error(f"Unexpected error processing file: {file_path} - {e}")

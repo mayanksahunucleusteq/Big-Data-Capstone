@@ -1,0 +1,32 @@
+dataframes:
+  customer: 
+  orders: 
+  product: 
+  order_item: 
+  review: 
+
+#Postgress Configuration
+postgresql:
+  #Jdbc Url, spark_data that return in last of url is a database name you can modify according to yours
+  jdbc_url: "jdbc:postgresql://host.docker.internal:5432/spark_data"
+  
+  #Set Your Own properties like user and Password driver is same
+  properties:
+    user: "postgres"
+    password: "Mayank@123"
+    driver: "org.postgresql.Driver"
+
+  #Unique Keys are simple a primary key you have acess to choose but make sure you choose unique column like customer_id in customer table  
+  unique_keys:
+    review: 
+      - "review_id"
+    product: 
+      - "product_id"
+    order_item: 
+      - "order_item_id"
+    customer: 
+      - "customer_id"
+    orders: 
+      - "order_id"
+
+

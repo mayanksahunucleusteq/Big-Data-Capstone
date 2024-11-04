@@ -1,8 +1,5 @@
 import psycopg2
-from pyspark.sql.types import (
-    StringType, IntegerType, LongType, DoubleType, FloatType, BooleanType,
-    TimestampType, DateType
-)
+from pyspark.sql.types import *
 from typing import Dict, List
 
 from utils.logging_setup import setup_logging
@@ -43,17 +40,7 @@ def load_all_tables(spark, jdbc_url, properties):
     :param properties: JDBC properties (user, password, driver)
     :return: Dictionary of DataFrames with table names as keys
     """
-    conn = None
     try:
-        # Connect to PostgreSQL
-        conn = psycopg2.connect(
-            host=jdbc_url.split("//")[1].split(":")[0],  # Extract host from jdbc_url
-            database=jdbc_url.split("/")[-1],  # Extract database name
-            user=properties["user"],
-            password=properties["password"]
-        )
-        cursor = conn.cursor()
-
         logger.info("Fetching table names from PostgreSQL.")
         tables_query = "(SELECT table_name FROM information_schema.tables WHERE table_schema='public') as table_list"
         tables_df = spark.read.jdbc(url=jdbc_url, table=tables_query, properties=properties)
@@ -71,16 +58,10 @@ def load_all_tables(spark, jdbc_url, properties):
     except Exception as e:
         logger.error(f"Error loading tables from PostgreSQL: {e}")
         raise
-
-    finally:
-        # Ensure the connection is closed after the operation
-        if conn is not None:
-            cursor.close()
-            conn.close()
-            logger.info("PostgreSQL connection closed.")
             
-#Save all dataframes in db
-def save_dfs_to_postgres_upsert(jdbc_url, properties, unique_key_columns: Dict[str, List[str]], **dataframes):
+
+#Save all the Dataframe into postgreSQL db
+def save_dfs_to_postgres_upsert(spark,jdbc_url, properties, unique_key_columns: Dict[str, List[str]], **dataframes):
     """
     Save multiple DataFrames to PostgreSQL using upsert functionality or create table if it doesn't exist,
     while preserving schema types.
@@ -108,13 +89,17 @@ def save_dfs_to_postgres_upsert(jdbc_url, properties, unique_key_columns: Dict[s
             raise ValueError(f"No primary key provided for table {table_name}.")
         
         # Check if the table exists
-        cursor.execute(f"""
-            SELECT EXISTS (
+        check_table_query = f"""
+            (SELECT EXISTS (
                 SELECT FROM information_schema.tables 
                 WHERE table_name = '{table_name}'
-            );
-        """)
-        table_exists = cursor.fetchone()[0]
+            )) AS table_exists
+            """     
+        # Execute the query with PySpark
+        table_check_df = spark.read.jdbc(url=jdbc_url, table=check_table_query, properties=properties)
+
+        # Check if the table exists by looking at the value in the DataFrame
+        table_exists = table_check_df.collect()[0][0]
 
         if not table_exists:
             # Get column names and types
@@ -175,3 +160,5 @@ def save_dfs_to_postgres_upsert(jdbc_url, properties, unique_key_columns: Dict[s
     # Close the PostgreSQL connection
     cursor.close()
     conn.close()
+
+
