@@ -1,0 +1,7 @@
+# Configuration for S3 data extraction
+s3_config:
+  bucket_name: "pyspark-etl-data-extraction-service"  # The name of the S3 bucket
+  folder_path: "PySpark-Data"   # Path to the folder in the S3 bucket
+  file_name: ""
+  region_name: "eu-north-1"           # AWS region for the S3 bucket
+  local_folder: "/spark-data/Aws_S3_files"

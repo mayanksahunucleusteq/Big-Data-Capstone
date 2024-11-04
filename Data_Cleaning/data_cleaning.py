@@ -8,12 +8,17 @@ from typing import Callable, Dict
 from typing import Any
 from pyspark.sql import functions
 from utils.report import *
+from datetime import datetime
+
+# Get the current date and time
+current_time = datetime.now().strftime("%Y_%m_%d___%H_%M_%S")
+
+# Construct the report file path dynamically
+report_path = f"/spark-data/Report/data_cleaning_report_{current_time}.pdf"
 
 # Call logging at the start of your script
 logger = setup_logging("/spark-data/logs/logger.log")
-report_folder = "/spark-data/Report"
 logger.setLevel(logging.INFO)
-
 
 #Removing Duplicate
 def remove_duplicates(df: DataFrame, columns: list = None) -> DataFrame:
@@ -580,7 +585,7 @@ def data_cleaning_pipeline(dfs: Dict[str, DataFrame], cleaning_config: Dict[str,
         # Store final state of DataFrames for comparison
     after_cleaning_dfs = analyze_dataframes(cleaned_dfs, spark)
     # Compare the before and after states and generate the report
-    compare_dataframes_and_generate_report(before_cleaning_dfs, after_cleaning_dfs, "/spark-data/Report/data_cleaning_report.pdf")
+    compare_dataframes_and_generate_report(before_cleaning_dfs, after_cleaning_dfs, report_path)
 
 
     return cleaned_dfs

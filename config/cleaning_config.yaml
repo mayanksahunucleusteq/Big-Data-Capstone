@@ -1,7 +1,17 @@
+dataframes:
+  customer: 
+  orders: 
+  product: 
+  order_item: 
+  review: 
+
+
 #Cleaning Confiquration
 cleaning:
   customer:
-    remove_duplicates: {}
+    remove_duplicates: 
+      columns:
+        - customer_id
     remove_decimal:
       columns:
         - customer_id
@@ -39,8 +49,10 @@ cleaning:
       - column: 'birth_date'
         target_type: 'date'
 
-  order:
-    remove_duplicates: {}
+  orders:
+    remove_duplicates: 
+      columns:
+        - order_id
     remove_decimal:
       columns:
         - order_id
@@ -79,7 +91,9 @@ cleaning:
         target_type: 'date'
 
   product:
-    remove_duplicates: {}
+    remove_duplicates: 
+      columns:
+        - product_id
     remove_decimal:
       columns:
         - product_id
@@ -113,7 +127,9 @@ cleaning:
         target_type: 'int'
 
   order_item:
-    remove_duplicates: {}
+    remove_duplicates: 
+      columns:
+        - order_item_id
     handle_negative_values:
       columns:
         - quantity
@@ -136,7 +152,9 @@ cleaning:
       archive_df_name: 'order_item'
 
   review:
-    remove_duplicates: {}
+    remove_duplicates: 
+      columns:
+        - review_id
     handle_negative_values:
       columns:
         - product_id
@@ -166,39 +184,5 @@ cleaning:
     convert_column_type:
       - column: 'review_date'
         target_type: 'date'
-
-#Transformation Configuration
-transformations:
-  customer:
-    add_age_column:
-      birth_date_column: 'birth_date'
-  order:
-    add_state_columns:
-      shipping_col: 'shipping_address'
-      billing_col: 'billing_address'
-
-#Postgress Configuration
-postgresql:
-  #Jdbc Url, spark_data that return in last of url is a database name you can modify according to yours
-  jdbc_url: "jdbc:postgresql://host.docker.internal:5432/spark_data"
-  
-  #Set Your Own properties like user and Password driver is same
-  properties:
-    user: "postgres"
-    password: "Mayank@123"
-    driver: "org.postgresql.Driver"
-
-  #Unique Keys are simple a primary key you have acess to choose but make sure you choose unique column like customer_id in customer table  
-  unique_keys:
-    review: 
-      - "review_id"
-    product: 
-      - "product_id"
-    order_item: 
-      - "order_item_id"
-    customer: 
-      - "customer_id"
-    orders: 
-      - "order_id"
 
 

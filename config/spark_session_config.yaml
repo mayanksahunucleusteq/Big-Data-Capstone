@@ -1,0 +1,25 @@
+aws:
+  access_key: "AKIAST6S7EUNMIRWP4PV"
+  secret_key: "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"
+
+snowflake:
+  url: "xdyvipr-br66777.snowflakecomputing.com"
+  account: "xdyvipr-br66777"
+  user: "MAYANK0101"
+  password: "Mayank25627@@"
+
+
+spark:
+  app_name: "Big_Data_Processing"
+  driver_memory: "4g"
+  executor_memory: "4g"
+  jars_packages:
+    - "org.postgresql:postgresql:42.2.20"
+    - "com.crealytics:spark-excel_2.12:3.4.1_0.19.0"
+    - "org.apache.hadoop:hadoop-aws:3.3.2"
+    - "net.snowflake:snowflake-jdbc:3.17.0"
+    - "net.snowflake:spark-snowflake_2.12:3.0.0"
+
+  s3a:
+    multipart_uploads_enabled: true  # or true
+    fast_upload: true  # or true

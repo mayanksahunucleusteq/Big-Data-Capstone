@@ -8,6 +8,13 @@ Data_Files
 logs
 Cleaned_Csv_File
 Archive
+Python-3.12.2
+airflow_home
+big_query_service_key
+
+demo.ipynb
+main_output.ipynb
+
 
 
 

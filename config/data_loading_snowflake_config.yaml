@@ -1,0 +1,23 @@
+snowflake:
+  sfDatabase: "ETL_DATA"
+  sfSchema: "ETL_SCHEMA"
+  sfWarehouse: "ETL_WAREHOUSE"
+  sfUrl: "xdyvipr-br66777.snowflakecomputing.com"  # Adjusted to the correct region (Asia Pacific - Mumbai)
+  sfAccount: "xdyvipr-br66777"  # Added account ID
+  sfUser: "MAYANK0101"
+  sfPassword: "Mayank25627@@"
+  sfRole: "ACCOUNTADMIN"  # Optional, if needed
+
+dataframes:
+  customer: 
+  review: 
+  product: 
+  orders: 
+  order_item: 
+
+unique_keys:
+  customer: "customer_id"
+  review: "review_id"
+  product: "product_id"
+  orders: "order_id"
+  order_item: "order_item_id"
