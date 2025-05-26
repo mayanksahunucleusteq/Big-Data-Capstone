@@ -1,12 +1,12 @@
 aws:
-  access_key: "AKIAST6S7EUNMIRWP4PV"
-  secret_key: "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"
+  access_key: "demo"
+  secret_key: "demo"
 
 snowflake:
-  url: "xdyvipr-br66777.snowflakecomputing.com"
-  account: "xdyvipr-br66777"
-  user: "MAYANK0101"
-  password: "Mayank25627@@"
+  url: "xdyvprcd-bsr66777.snowflakecomputing.com"
+  account: "xdyvprcd-bsr66777"
+  user: "demo"
+  password: "demo"
 
 
 spark:
