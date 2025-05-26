@@ -13,7 +13,7 @@ postgresql:
   #Set Your Own properties like user and Password driver is same
   properties:
     user: "postgres"
-    password: "Mayank@123"
+    password: "demo"
     driver: "org.postgresql.Driver"
 
   #Unique Keys are simple a primary key you have acess to choose but make sure you choose unique column like customer_id in customer table  
