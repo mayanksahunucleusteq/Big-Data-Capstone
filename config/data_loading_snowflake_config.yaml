@@ -2,10 +2,10 @@ snowflake:
   sfDatabase: "ETL_DATA"
   sfSchema: "ETL_SCHEMA"
   sfWarehouse: "ETL_WAREHOUSE"
-  sfUrl: "xdyviprhd-br66777.snowflakecomputing.com"  # demo url Adjusted to the correct region (Asia Pacific - Mumbai)
-  sfAccount: "xdyviprhd-br66777"  # Added account ID
-  sfUser: "MAYANK0101"
-  sfPassword: "Mayank25627@@"
+  sfUrl: "DEMO"  # demo url Adjusted to the correct region (Asia Pacific - Mumbai)
+  sfAccount: "DEMO"  # Added account ID
+  sfUser: "demo"
+  sfPassword: "demo"
   sfRole: "ACCOUNTADMIN"  # Optional, if needed
 
 dataframes:
